@@ -1,5 +1,9 @@
+# check if kbase module
 TOP_DIR = ../..
-include $(TOP_DIR)/tools/Makefile.common
+ifeq ($(wildcard TOP_DIR/tools/Makefile.common),'')
+	include $(TOP_DIR)/tools/Makefile.common
+endif
+
 CWD= $(shell pwd)
 # CC
 CC = g++
@@ -8,7 +12,8 @@ GLPKLIB = -lglpk
 LIBS = -lpthread -lz ${GLPKLIB}
 # INCS
 MFATK_INC = -I${CWD}/include
-INCS = ${MFATK_INC}
+ENV_INC   = ${INC}
+INCS = ${MFATK_INC} ${ENV_INC}
 # FLAGS
 OFLAGS = -DNDEBUG -DIL_STD -DILOSTRICTPOD -DNOSAFEMEM -DNOBLOCKMEM -O3
 FFLAGS = -fPIC -fexceptions
@@ -29,7 +34,7 @@ mfatoolkit: $(OBJFILES)
 	${CC} ${CCFLAGS} -c $<; mv *.o ${SRCDIR}
 
 deploy-mfatoolkit:
-	cp bin/mfatoolkit ${TARGET}/bin
+	cp bin/mfatoolkit ${TARGET}/bin/
 
 deploy: mfatoolkit deploy-mfatoolkit
 
