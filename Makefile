@@ -1,5 +1,9 @@
+# check if kbase module
 TOP_DIR = ../..
-include $(TOP_DIR)/tools/Makefile.common
+ifeq ($(wildcard TOP_DIR/tools/Makefile.common),'')
+	include $(TOP_DIR)/tools/Makefile.common
+endif
+
 CWD= $(shell pwd)
 # CC
 CC = g++
@@ -30,7 +34,7 @@ mfatoolkit: $(OBJFILES)
 	${CC} ${CCFLAGS} -c $<; mv *.o ${SRCDIR}
 
 deploy-mfatoolkit:
-	cp bin/mfatoolkit ${TARGET}/bin
+	cp bin/mfatoolkit ${TARGET}/bin/
 
 deploy: mfatoolkit deploy-mfatoolkit
 
