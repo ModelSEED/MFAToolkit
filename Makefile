@@ -28,6 +28,7 @@ SRCFILES = ${SRCDIR}/driver.cpp ${SRCDIR}/MFAProblem.cpp ${SRCDIR}/${CPLEXAPI} $
 OBJFILES = $(SRCFILES:.cpp=.o)
 
 mfatoolkit: $(OBJFILES)
+	mkdir bin
 	${CC} ${CCFLAGS} -o bin/mfatoolkit $(^) ${LDFLAGS}
 
 %.o: %.cpp
