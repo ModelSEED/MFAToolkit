@@ -56,7 +56,7 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 		return NULL;	
 	}
 	//Calling the scrip executable
-	system((GetParameter("scip executable")+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
+	system((FProgramPath()+GetParameter("scip executable")+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
 	SetParameter("LP filename",CurrentFilename.data());
 	OptSolutionData* NewSolution = ParseSCIPSolution("ScipOutput.out",SolverVariables());
 	if (NewSolution != NULL) {

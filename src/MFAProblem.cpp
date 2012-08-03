@@ -6798,8 +6798,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,str
 		return FAIL;
 	}
 	
-	string originalParam = GetParameter("print lp files rather than solve");
-	SetParameter("print lp files rather than solve","0");
 	NewSolution = RunSolver(true,true,true);
 	if (NewSolution == NULL) {
 		Note.append("Problem failed to return a solution");
@@ -6822,7 +6820,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,str
 		return SUCCESS;
 	}
 	Note.assign("Growth acheived with expanded model");
-	SetParameter("print lp files rather than solve",originalParam.data());
 
 	//Creating the objective constriant
 	LinEquation* ObjConst = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*ObjectiveValue,GREATER);
@@ -6855,12 +6852,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,str
 	vector<int> VariableTypes;
 	VariableTypes.push_back(OBJECTIVE_TERMS);
 	SetParameter("Current gap filling solutions","");
-	int TotalSolution = 0;
-	if (GetParameter("print lp files rather than solve").compare("1") == 0) {
-		NewSolution = RunSolver(true,false,true);
-	} else {
-		TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
-	}
+	int TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
 	//Printing the gap filling output
 	if (TotalSolution > 0) {
 		ofstream Output;
