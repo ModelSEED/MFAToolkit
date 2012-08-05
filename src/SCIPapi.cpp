@@ -47,6 +47,7 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 		return NULL;
 	}
 	Output << "limits/time = " << GetParameter("CPLEX solver time limit") << endl;
+	Output << "numerics/feastol = 0.000000001" << endl;
 	Output.close();
 	//Printing the problem to an LP file in the output directory
 	string CurrentFilename = GetParameter("LP filename");
