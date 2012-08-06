@@ -234,7 +234,7 @@ Compounds excluded from potential constraints|none|Create Gibbs energy constrain
 Compounds to have potential constraint|ALL|Only create Gibbs energy constraints for these compounds or ALL or PConstraintsFile.txt|MFA Parameter
 Add regulatory constraint to problem|0|MFA parameters
 Base compound regulation on media files|0|MFA parameters
-Regulatory constraint file|../Input/RegulatoryConstraints.txt|MFA parameters
+Regulatory constraint file|../etc/RegulatoryConstraints.txt|MFA parameters
 Gene dictionary|NONE|0|MFA parameters
 Compounds to have potential constraint|ALL|Only create Gibbs energy constraints for these compounds or ALL or PConstraintsFile.txt|MFA Parameter
 Check potential constraints feasibility|0|checks each of the chemical potential constraints if they affect the solution|MFA Parameter
@@ -248,10 +248,10 @@ Calculations:compounds:process list|NONE|Indicates which reactions should be pro
 use default flux bound for media uptake|0|0|MFA parameters
 Add reaction drain fluxes|none|0|MFA parameters
 delete noncontributing reactions|0|0|MFA parameters
-Function mapping filename|../Input/FunctionRoleMapping.txt|0|MFA parameters
-Reaction database filename|../Input/ReactionDatabase.txt|0|MFA parameters
-hope scenarios filename|../Input/HopeScenarios.txt|0|MFA parameters
-database root output directory|../temp/|0|MFA parameters
+Function mapping filename|../etc/FunctionRoleMapping.txt|0|MFA parameters
+Reaction database filename|../etc/ReactionDatabase.txt|0|MFA parameters
+hope scenarios filename|../etc/HopeScenarios.txt|0|MFA parameters
+database root output directory|../tmp/|0|MFA parameters
 database root input directory|../etc/|0|MFA parameters
 molfile directory|../etc/mol/|0/MFA parameters
 cue directory|../etc/cues/|0/MFA parameters
