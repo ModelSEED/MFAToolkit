@@ -60,6 +60,27 @@ Reaction::Reaction(string Filename, Data* InData) {
 	PerformAllCalculations();
 };
 
+Reaction::Reaction(string id,string equation,string name,Data* InData) {
+	GeneRootNode = NULL;
+	EstDeltaG = FLAG;
+	EstDeltaGUncertainty = FLAG;
+	MainData = InData;
+	SetIndex(InData->FNumReactions());
+	SetEntry(InData->FNumReactions()+1);
+	SetKill(false);
+	SetMark(false);
+	SetCode("");
+	SetData("STATUS","OK",STRING);
+	Type = REVERSIBLE; //Default is reversible
+	NumReactants = 0;
+	PathwayList = NULL;
+	Interpreter("id",id,true);
+	Interpreter("equation",equation,true);
+	Interpreter("name",equation,true);
+	AddToReactants();
+	PerformAllCalculations();
+};
+
 Reaction::~Reaction() {
 	if (PathwayList != NULL) {
 		list<Pathway*>::iterator ListIT = PathwayList->begin();

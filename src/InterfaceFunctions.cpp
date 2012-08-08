@@ -22,7 +22,7 @@
 
 void CommandlineInterface(vector<string> Arguments) {
 	vector<string> ParameterFiles;
-	ParameterFiles.push_back("../etc/Defaults.txt");
+	ParameterFiles.push_back("../etc/MFAToolkit/Defaults.txt");
 	for (int i=0; i < int(Arguments.size()); i++) {
 		if (Arguments[i].compare("parameterfile") == 0) {
 			if (int(Arguments.size()) >= i+2) {

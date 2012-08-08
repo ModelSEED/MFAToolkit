@@ -87,6 +87,7 @@ private:
 public:
 	Reaction(vector<string>* InHeaders, string Fileline, Data* InData);
 	Reaction(string Filename, Data* InData);
+	Reaction(string id,string equation,string name,Data* InData);
 	~Reaction();
 
 	//Input functions

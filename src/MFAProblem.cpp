@@ -6036,8 +6036,25 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 		if (GetParameter("dissapproved compartments").compare("none") != 0) {
 			DissapprovedCompartments = StringToStrings(GetParameter("dissapproved compartments"),";");
 		}
+		//Loading reactions supplying biomass components for biomass hypothesis
+		if (GetParameter("Biomass modification hypothesis").compare("1") == 0) {
+			if (verbose()) {
+				cout << "Loading Biomass component reactions\n";
+			}
+			GetStringDB()->loadDatabaseTable("biomassRxn","SINGLEFILE","id",FOutputFilepath(),"","\t","|",StringToStrings("id","|",false),true);
+			StringDBTable* rxntbl = GetStringDB()->get_table("biomassRxn");
+			if (rxntbl == NULL) {
+				return FAIL;
+			}
+			for (int i=0; i < rxntbl->number_of_objects();i++) {
+				StringDBObject* rxnobj = rxntbl->get_object(i);
+				Reaction* NewReaction = new Reaction(rxnobj->get("id"),InData);
+				NewReaction->AddData("FOREIGN","BiomassRxn",STRING);
+				NewReaction->SetType(FORWARD);
+				InData->AddReaction(NewReaction);
+			}
+		}
 		//Iterating through the list and loading any reaction that is not already present in the model		
-
 		StringDBTable* rxntbl = GetStringDB()->get_table("reaction");
 		if (rxntbl == NULL) {
 			return FAIL;

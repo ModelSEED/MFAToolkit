@@ -2,7 +2,7 @@ database spec file|none|
 structural cue database file|FinalGroups.txt|
 user constraints filename|none|
 MFA problem report filename|ProblemReport.txt|
-input directory|../etc/|Directory where input files are stored|MFA files
+input directory|../etc/MFAToolkit/|Directory where input files are stored|MFA files
 scripts directory|../bin/|This is the directory where all perl scripts used by the MFAToolpack are located. This should be a complete path.|Filenames required for proper program start up
 output folder|default/|"This is the specific folder located in the ""output path"" where the results from the current run will be stored."|Filenames required for proper program start up
 compartments file|DefaultCompartments.txt|This indicates where the file containing the cellular compartment data is located. This can be relative to the program directory or a complete path.|Filenames required for proper program start up
@@ -234,7 +234,7 @@ Compounds excluded from potential constraints|none|Create Gibbs energy constrain
 Compounds to have potential constraint|ALL|Only create Gibbs energy constraints for these compounds or ALL or PConstraintsFile.txt|MFA Parameter
 Add regulatory constraint to problem|0|MFA parameters
 Base compound regulation on media files|0|MFA parameters
-Regulatory constraint file|../etc/RegulatoryConstraints.txt|MFA parameters
+Regulatory constraint file|../etc/MFAToolkit/RegulatoryConstraints.txt|MFA parameters
 Gene dictionary|NONE|0|MFA parameters
 Compounds to have potential constraint|ALL|Only create Gibbs energy constraints for these compounds or ALL or PConstraintsFile.txt|MFA Parameter
 Check potential constraints feasibility|0|checks each of the chemical potential constraints if they affect the solution|MFA Parameter
@@ -248,10 +248,10 @@ Calculations:compounds:process list|NONE|Indicates which reactions should be pro
 use default flux bound for media uptake|0|0|MFA parameters
 Add reaction drain fluxes|none|0|MFA parameters
 delete noncontributing reactions|0|0|MFA parameters
-Function mapping filename|../etc/FunctionRoleMapping.txt|0|MFA parameters
-Reaction database filename|../etc/ReactionDatabase.txt|0|MFA parameters
-hope scenarios filename|../etc/HopeScenarios.txt|0|MFA parameters
+Function mapping filename|../etc/MFAToolkit/FunctionRoleMapping.txt|0|MFA parameters
+Reaction database filename|../etc/MFAToolkit/ReactionDatabase.txt|0|MFA parameters
+hope scenarios filename|../etc/MFAToolkit/HopeScenarios.txt|0|MFA parameters
 database root output directory|../tmp/|0|MFA parameters
-database root input directory|../etc/|0|MFA parameters
-molfile directory|../etc/mol/|0/MFA parameters
-cue directory|../etc/cues/|0/MFA parameters
+database root input directory|../etc/MFAToolkit/|0|MFA parameters
+molfile directory|../etc/MFAToolkit/mol/|0/MFA parameters
+cue directory|../etc/MFAToolkit/cues/|0/MFA parameters
