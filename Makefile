@@ -1,5 +1,9 @@
+# check if kbase module
 TOP_DIR = ../..
-include $(TOP_DIR)/tools/Makefile.common
+ifeq ($(wildcard TOP_DIR/tools/Makefile.common),'')
+	include $(TOP_DIR)/tools/Makefile.common
+endif
+
 CWD= $(shell pwd)
 # CC
 CC = g++
@@ -24,6 +28,7 @@ SRCFILES = ${SRCDIR}/driver.cpp ${SRCDIR}/MFAProblem.cpp ${SRCDIR}/${CPLEXAPI} $
 OBJFILES = $(SRCFILES:.cpp=.o)
 
 mfatoolkit: $(OBJFILES)
+	if [ ! -d bin ]; then mkdir bin; fi
 	${CC} ${CCFLAGS} -o bin/mfatoolkit $(^) ${LDFLAGS}
 
 %.o: %.cpp

@@ -98,40 +98,6 @@ int GlobalInitializeSolver(int Solver) {
 }
 
 OptSolutionData* GlobalRunSolver(int Solver, int ProbType) {
-	if (GetParameter("print lp files rather than solve").compare("1") == 0) {
-		ofstream JobFileOutput;
-		string LPFilename = GetParameter("LP filename");
-		if (GetParameter("LP file index").length() == 0) {
-			OpenOutput(JobFileOutput,FOutputFilepath()+"MFAOutput/LPFiles/JobFile.txt",false);
-			SetParameter("LP file index","0");
-			MakeDirectory((FOutputFilepath()+"MFAOutput/LPFiles/").data());
-			//ClearDirectory((FOutputFilepath()+"MFAOutput/LPFiles/"));
-		} else {
-			OpenOutput(JobFileOutput,FOutputFilepath()+"MFAOutput/LPFiles/JobFile.txt",true);
-		}
-		int count = atoi(GetParameter("LP file index").data());
-		JobFileOutput << GetParameter("LP solver filename") << " -s " << GetParameter("LP job directory") << "ScipSettings.txt -f " << GetParameter("LP job directory") << "LPFiles/" << count << ".lp > " << GetParameter("LP job directory") << "Output/OutputFile" << count << ".txt" << endl;
-		JobFileOutput.close();
-		SetParameter("LP file index",itoa(count+1));
-		string Temp("MFAOutput/LPFiles/");
-		SetParameter("LP filename",(Temp+itoa(count)+".lp").data());
-		GlobalWriteLPFile(Solver);
-		SetParameter("LP filename",LPFilename.data());
-		return NULL;
-	} else if (GetParameter("use solver output files").compare("1") == 0) {
-		if (GetParameter("LP file index").length() == 0) {
-			SetParameter("LP file index","0");
-		}
-		int count = atoi(GetParameter("LP file index").data());
-		SetParameter("LP file index",itoa(count+1));
-		string Temp("MFAOutput/LPFiles/");
-		OptSolutionData* NewSolution = ParseSCIPSolution((Temp+"OutputFile"+itoa(count)+".txt").data(),Variables);
-		if (NewSolution != NULL) {
-			cout << "Objective value: " << NewSolution->Objective << endl;
-		}
-		return NewSolution;
-	}
-
 	if (Solver == CPLEX) {
 		return CPLEXRunSolver(ProbType);
 	} else if (Solver == LINDO) {

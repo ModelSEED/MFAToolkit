@@ -47,6 +47,7 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 		return NULL;
 	}
 	Output << "limits/time = " << GetParameter("CPLEX solver time limit") << endl;
+	Output << "numerics/feastol = 0.000000001" << endl;
 	Output.close();
 	//Printing the problem to an LP file in the output directory
 	string CurrentFilename = GetParameter("LP filename");
@@ -56,7 +57,7 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 		return NULL;	
 	}
 	//Calling the scrip executable
-	system((GetParameter("scip executable")+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
+	system((FProgramPath()+GetParameter("scip executable")+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
 	SetParameter("LP filename",CurrentFilename.data());
 	OptSolutionData* NewSolution = ParseSCIPSolution("ScipOutput.out",SolverVariables());
 	if (NewSolution != NULL) {
