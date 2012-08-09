@@ -35,7 +35,7 @@ mfatoolkit: $(OBJFILES)
 	${CC} ${CCFLAGS} -c $<; mv *.o ${SRCDIR}
 
 deploy-mfatoolkit:
-	if [ !-d ${TARGET}/etc/MFAToolkit ]; then mkdir -p ${TARGET}/etc/MFAToolkit; fi
+	if [ ! -d ${TARGET}/etc/MFAToolkit ]; then mkdir -p ${TARGET}/etc/MFAToolkit; fi
 	cp -r etc ${TARGET}
 	cp bin/mfatoolkit ${TARGET}/bin
 
