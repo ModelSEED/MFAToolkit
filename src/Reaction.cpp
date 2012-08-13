@@ -76,7 +76,7 @@ Reaction::Reaction(string id,string equation,string name,Data* InData) {
 	PathwayList = NULL;
 	Interpreter("id",id,true);
 	Interpreter("equation",equation,true);
-	Interpreter("name",equation,true);
+	Interpreter("name",name,true);
 	AddToReactants();
 	PerformAllCalculations();
 };

@@ -6041,14 +6041,14 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			if (verbose()) {
 				cout << "Loading Biomass component reactions\n";
 			}
-			GetStringDB()->loadDatabaseTable("biomassRxn","SINGLEFILE","id",FOutputFilepath(),"","\t","|",StringToStrings("id","|",false),true);
-			StringDBTable* rxntbl = GetStringDB()->get_table("biomassRxn");
+			GetStringDB()->loadDatabaseTable("biomassComponentRxn","SINGLEFILE","id",FOutputFilepath()+"BiomassHypothesisEquations.txt","","\t","|",StringToStrings("id","|",false),true);
+			StringDBTable* rxntbl = GetStringDB()->get_table("biomassComponentRxn");
 			if (rxntbl == NULL) {
 				return FAIL;
 			}
 			for (int i=0; i < rxntbl->number_of_objects();i++) {
 				StringDBObject* rxnobj = rxntbl->get_object(i);
-				Reaction* NewReaction = new Reaction(rxnobj->get("id"),InData);
+				Reaction* NewReaction = new Reaction(rxnobj->get("id"),rxnobj->get("equation"),rxnobj->get("name"),InData);
 				NewReaction->AddData("FOREIGN","BiomassRxn",STRING);
 				NewReaction->SetType(FORWARD);
 				InData->AddReaction(NewReaction);
@@ -6592,9 +6592,13 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				}
 			}
 		}
-
 		for (int i=0; i < InData->FNumReactions(); i++) {
-			if (InData->GetReaction(i)->GetData("FOREIGN",STRING).length() > 0) {
+			if (InData->GetReaction(i)->GetData("FOREIGN",STRING).compare("BiomassRxn") == 0) {
+				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+				if (TempVariable != NULL) {
+					VariableCoefficients[TempVariable] = atof(GetParameter("Biomass component reaction penalty").data());
+				}
+			} else if (InData->GetReaction(i)->GetData("FOREIGN",STRING).length() > 0) {
 				double Coefficient = 1;
 				//Applying the non kegg reaction penalty
 				if (InData->GetReaction(i)->GetData("KEGG",DATABASE_LINK).length() == 0) {
