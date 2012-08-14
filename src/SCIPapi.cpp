@@ -19,6 +19,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "MFAToolkit.h"
+#include <iostream>
+#include <fstream>
 
 int InitializeSCIPVariables() {
 	return SUCCESS;
@@ -56,8 +58,14 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 		SetParameter("LP filename",CurrentFilename.data());
 		return NULL;	
 	}
-	//Calling the scrip executable
-	system((FProgramPath()+GetParameter("scip executable")+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
+        //Find the scip executable
+        string scip = FProgramPath() + GetParameter("scip executable");
+        std::ifstream scip_bin(scip.c_str());
+         if (!scip_bin.good()) {
+           scip = GetParameter("scip executable");
+         }
+	//Calling the scip executable
+	system((scip+" -s "+FOutputFilepath()+"ScipSettings.txt -f "+FOutputFilepath()+GetParameter("LP filename")+" > "+FOutputFilepath()+"ScipOutput.out").data());
 	SetParameter("LP filename",CurrentFilename.data());
 	OptSolutionData* NewSolution = ParseSCIPSolution("ScipOutput.out",SolverVariables());
 	if (NewSolution != NULL) {
