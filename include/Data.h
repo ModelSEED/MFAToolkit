@@ -143,6 +143,7 @@ public:
 	void IdentifyCompoundsByStringcode();
 	void AutomaticallyCreateGeneIntervals(OptimizationParameter* InParameters);
 	void GenerateBNICESubnetwork();
+	void TransformToBiomassCompartment();
 
 	//File output
 	int SaveSystem();

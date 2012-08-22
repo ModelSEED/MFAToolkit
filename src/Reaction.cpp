@@ -621,6 +621,12 @@ int Reaction::ParseGeneString(string InGeneString) {
 	return SUCCESS;
 }
 
+void Reaction::SetReactantCompartment(int reactant,int compartment) {
+	if (reactant < this->FNumReactants()) {
+		this->ReactCompartments[reactant] = compartment;
+	}
+}
+
 //Output functions
 int Reaction::FType() {
 	return Type;	

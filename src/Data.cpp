@@ -1181,6 +1181,7 @@ void Data::SearchForPathways() {
 }
 
 void Data::PerformMFA() {
+	TransformToBiomassCompartment();
 	MakeDirectory((FOutputFilepath()+"MFAOutput/").data());
 	
 	//Reading in the user-set parameters for the MFA
@@ -1869,6 +1870,49 @@ void Data::GenerateBNICESubnetwork() {
 
 	delete Subnetwork;
 	delete AllowedRules;
+}
+
+void Data::TransformToBiomassCompartment() {
+	map<Species*, map<int, bool> > BiomassReactants;
+	map<Species*, map<int, bool> > BiomassProducts;
+	for (int i=0; i < this->FNumReactions(); i++) {
+		Reaction* current = this->GetReaction(i);
+		if (current->IsBiomassReaction()) {
+			for (int j=0; j < current->FNumReactants(); j++) {
+				if (current->GetReactantCompartment(j) != GetCompartment("b")->Index) {
+					Species* reactant = current->GetReactant(j);
+					if (current->GetReactantCoef(j) < 0) {
+						BiomassReactants[reactant][current->GetReactantCompartment(j)] = true;
+					} else {
+						BiomassProducts[reactant][current->GetReactantCompartment(j)] = true;
+					}
+					current->SetReactantCompartment(j,GetCompartment("b")->Index);
+				}
+			}
+		}
+	}
+	for (map<Species*, map<int, bool> >::iterator IT = BiomassReactants.begin(); IT != BiomassReactants.end(); IT++) {
+		for (map<int, bool>::iterator ITT = IT->second.begin(); ITT != IT->second.end(); ITT++) {
+			Species* reactant = IT->first;
+			Reaction* newReaction = new Reaction("",this);
+			newReaction->AddReactant(reactant,-1,ITT->first);
+			newReaction->AddReactant(reactant,1,GetCompartment("b")->Index);
+			newReaction->SetType(FORWARD);
+			newReaction->SetData("DATABASE",(reactant->GetData("DATABASE",STRING)+"BiomassReactant").data(),STRING);
+			this->AddReaction(newReaction);
+		}
+	}
+	for (map<Species*, map<int, bool> >::iterator IT = BiomassProducts.begin(); IT != BiomassProducts.end(); IT++) {
+		for (map<int, bool>::iterator ITT = IT->second.begin(); ITT != IT->second.end(); ITT++) {
+			Species* reactant = IT->first;
+			Reaction* newReaction = new Reaction("",this);
+			newReaction->AddReactant(reactant,-1,GetCompartment("b")->Index);
+			newReaction->AddReactant(reactant,1,ITT->first);
+			newReaction->SetType(FORWARD);
+			newReaction->SetData("DATABASE",(reactant->GetData("DATABASE",STRING)+"BiomassProduct").data(),STRING);
+			this->AddReaction(newReaction);
+		}
+	}
 }
 
 //File output

@@ -107,6 +107,7 @@ public:
 	int ReadFromFileline(vector<string>* InHeaders, string Fileline);
 	int AddGene(Gene* InGene, int ComplexIndex);
 	int ParseGeneString(string InGeneString);
+	void SetReactantCompartment(int reactant,int compartment);
 
 	//Output functions
 	int FType();

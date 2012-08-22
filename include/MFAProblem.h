@@ -126,7 +126,7 @@ public:
 	//Analysis functions
 	map<int , vector<double> , std::less<int> >* CalcConcMeanIonicStrength();
 	void ProcessSolution(OptSolutionData* InSolution);
-	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters, bool SaveSolution, bool UseSpecifiedSearchTypes);
+	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters, bool SaveSolution, bool UseSpecifiedSearchTypes = false);
 	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters,string Note);
 	int RecursiveMILP(Data* InData,OptimizationParameter*& InParameters, vector<int> VariableTypes,bool PrintSolutions);
 	vector<OptSolutionData*> RecursiveMILP(OptimizationParameter* InParameters, string ProblemNote,bool ForeignOnly,vector<int> VariableTypes,double MinSolution,int ClockIndex,LinEquation* OriginalObjective);
