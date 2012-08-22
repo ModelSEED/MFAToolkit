@@ -1,7 +1,9 @@
 # check if kbase module
 TOP_DIR = ../..
+IN_KBASE=0
 ifeq ($(wildcard TOP_DIR/tools/Makefile.common),'')
 	include $(TOP_DIR)/tools/Makefile.common
+	IN_KBASE=1
 endif
 
 CWD= $(shell pwd)
@@ -38,6 +40,7 @@ deploy-mfatoolkit:
 	if [ ! -d ${TARGET}/etc/MFAToolkit ]; then mkdir -p ${TARGET}/etc/MFAToolkit; fi
 	cp -r etc ${TARGET}
 	cp bin/mfatoolkit ${TARGET}/bin
+	if [ ${IN_KBASE} ]; then curl "http://bioseed.mcs.anl.gov/~devoid/scip" > ${TARGET}/bin/scip; chmod +x ${TARGET}/bin/scip; fi
 
 deploy: mfatoolkit deploy-mfatoolkit
 
