@@ -3255,7 +3255,7 @@ int MFAProblem::CheckIndividualMetaboliteProduction(Data* InData, OptimizationPa
 			//NewNote.append(DrainVariables[i]->AssociatedSpecies->GetData("DATABASE",STRING));
 			//Status = OptimizeSingleObjective(InData,InParameters,FindTightBounds,MinimizeForeignReactions,CurrentObjective,NewNote,SubProblem);
 			OptSolutionData* NewSolution = RunSolver(false,true,false);
-			if (NewSolution != NULL || NewSolution->Status != SUCCESS) {
+			if (NewSolution != NULL && NewSolution->Status == SUCCESS) {
 				if (fabs(NewSolution->Objective) < 1e-7) {
 					SetParameter("No growth metabolites",(GetParameter("No growth metabolites")+DrainVariables[i]->AssociatedSpecies->GetData("DATABASE",STRING)+";").data());
 				}
@@ -3374,7 +3374,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	SavedBounds* currentBounds = this->saveBounds();
 	bool originalSense = this->FMax();
 	LinEquation* originalObjective = this->GetObjective();
-	ObjFunct = NULL;
+	//ObjFunct = NULL;
 	map<string,bool> inactiveReactions;
 	map<string,bool> compoundsToAssess;
 	SetParameter("tight bounds search variables","FLUX;FORWARD_FLUX;REVERSE_FLUX;DRAIN_FLUX;FORWARD_DRAIN_FLUX;REVERSE_DRAIN_FLUX");
@@ -3411,7 +3411,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		}
 		delete strings;
 	}
-	//LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(-10000,GREATER);
+	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(-10000,GREATER);
 	for (int i=0; i < int(InParameters->labels.size()); i++) {
 		double WTgrowth = 0;
 		double growth = 0;
@@ -3434,8 +3434,8 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		}
 		ObjFunct = NULL;
 		this->AddObjective(originalObjective);
+		this->LoadSolver();
 		LoadObjective();
-		//this->LoadSolver();
 		NewSolution = RunSolver(false,true,false);
 		vector<Reaction*> KOReactions;
 		if (NewSolution != NULL && NewSolution->Status == SUCCESS) {
@@ -3499,8 +3499,8 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 						delete strings;
 					}
 					if (growth > 1e-7 && GetParameter("find tight bounds").compare("1") == 0) {
-						//objectiveConstraint->RightHandSide = NewSolution->Objective*0.1;
-						//this->LoadConstToSolver(objectiveConstraint->Index);
+						objectiveConstraint->RightHandSide = NewSolution->Objective*0.1;
+						this->LoadConstToSolver(objectiveConstraint->Index);
 						bool currentSense = this->FMax();
 						LinEquation* currObj = this->GetObjective();
 						ObjFunct = NULL;
@@ -3526,8 +3526,8 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 								}
 							}
 						}
-						//objectiveConstraint->RightHandSide = -10000;
-						//this->LoadConstToSolver(objectiveConstraint->Index);
+						objectiveConstraint->RightHandSide = -10000;
+						this->LoadConstToSolver(objectiveConstraint->Index);
 						this->AddObjective(currObj);
 						if (currentSense) {
 							this->SetMax();
@@ -3562,8 +3562,8 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 								}
 							}
 							if (NewSolution->Objective > 1e-7 && GetParameter("find tight bounds").compare("1") == 0) {
-								//objectiveConstraint->RightHandSide = NewSolution->Objective*0.1;
-								//this->LoadConstToSolver(objectiveConstraint->Index);
+								objectiveConstraint->RightHandSide = NewSolution->Objective*0.1;
+								this->LoadConstToSolver(objectiveConstraint->Index);
 								bool currentSense = this->FMax();
 								LinEquation* currObj = this->GetObjective();
 								ObjFunct = NULL;
@@ -3599,8 +3599,8 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 									}
 									newInactiveReactions.append("DELETED");
 								}
-								//objectiveConstraint->RightHandSide = -10000;
-								//this->LoadConstToSolver(objectiveConstraint->Index);
+								objectiveConstraint->RightHandSide = -10000;
+								this->LoadConstToSolver(objectiveConstraint->Index);
 								this->AddObjective(currObj);
 								if (currentSense) {
 									this->SetMax();
@@ -6026,6 +6026,27 @@ int MFAProblem::IdentifyReactionLoops(Data* InData, OptimizationParameter* InPar
 	return SUCCESS;
 }
 
+int MFAProblem::LoadBiomassDrainReactions(Data* InData, OptimizationParameter* InParameters) {
+	//Loading reactions supplying biomass components for biomass hypothesis
+	if (GetParameter("Biomass modification hypothesis").compare("1") == 0) {
+		if (verbose()) {
+			cout << "Loading Biomass component reactions\n";
+		}
+		GetStringDB()->loadDatabaseTable("biomassComponentRxn","SINGLEFILE","id",FOutputFilepath()+"BiomassHypothesisEquations.txt","","\t","|",StringToStrings("id","|",false),true);
+		StringDBTable* rxntbl = GetStringDB()->get_table("biomassComponentRxn");
+		if (rxntbl == NULL) {
+			return FAIL;
+		}
+		for (int i=0; i < rxntbl->number_of_objects();i++) {
+			StringDBObject* rxnobj = rxntbl->get_object(i);
+			Reaction* NewReaction = new Reaction(rxnobj->get("id"),rxnobj->get("equation"),rxnobj->get("name"),InData);
+			NewReaction->AddData("FOREIGN","BiomassRxn",STRING);
+			NewReaction->SetType(FORWARD);
+			InData->AddReaction(NewReaction);
+		}
+	}
+}
+
 int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters) {
 	if (InData->GetData("Reaction list loaded",STRING).length() == 0) {
 		InData->AddData("Reaction list loaded","YES",STRING);
@@ -6036,24 +6057,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 		if (GetParameter("dissapproved compartments").compare("none") != 0) {
 			DissapprovedCompartments = StringToStrings(GetParameter("dissapproved compartments"),";");
 		}
-		//Loading reactions supplying biomass components for biomass hypothesis
-		if (GetParameter("Biomass modification hypothesis").compare("1") == 0) {
-			if (verbose()) {
-				cout << "Loading Biomass component reactions\n";
-			}
-			GetStringDB()->loadDatabaseTable("biomassComponentRxn","SINGLEFILE","id",FOutputFilepath()+"BiomassHypothesisEquations.txt","","\t","|",StringToStrings("id","|",false),true);
-			StringDBTable* rxntbl = GetStringDB()->get_table("biomassComponentRxn");
-			if (rxntbl == NULL) {
-				return FAIL;
-			}
-			for (int i=0; i < rxntbl->number_of_objects();i++) {
-				StringDBObject* rxnobj = rxntbl->get_object(i);
-				Reaction* NewReaction = new Reaction(rxnobj->get("id"),rxnobj->get("equation"),rxnobj->get("name"),InData);
-				NewReaction->AddData("FOREIGN","BiomassRxn",STRING);
-				NewReaction->SetType(FORWARD);
-				InData->AddReaction(NewReaction);
-			}
-		}
+		this->LoadBiomassDrainReactions(InData,InParameters);
 		//Iterating through the list and loading any reaction that is not already present in the model		
 		StringDBTable* rxntbl = GetStringDB()->get_table("reaction");
 		if (rxntbl == NULL) {
@@ -6926,6 +6930,8 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 		ClearConstraints();
 		ClearVariables();
 	}
+	//Loading biomass component reactions, which provide for new components in biomass
+	this->LoadBiomassDrainReactions(InData,InParameters);
 	BuildMFAProblem(InData,InParameters);
 
 	//Adding the objective to the original problem
@@ -7126,13 +7132,17 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 	}
 	if (GetParameter("Gap generation media").compare(GetParameter("user bounds filename")) != 0 && GetParameter("Gap generation media").compare("none") != 0) {
 		//Undoing the previous media settings
+		double maxDrainFlux = InParameters->MaxDrainFlux;
+		if (GetParameter("Gap generation media").compare("Complete") == 0) {
+			maxDrainFlux = 100;
+		}
 		for (int i=0; i < NumOriginalVariables; i++) {
 			if (GetVariable(i)->Type == DRAIN_FLUX) {
-				SecondNetworkVariables[GetVariable(i)->Index]->UpperBound = InParameters->MaxDrainFlux;
+				SecondNetworkVariables[GetVariable(i)->Index]->UpperBound = maxDrainFlux;
 				SecondNetworkVariables[GetVariable(i)->Index]->LowerBound = InParameters->MinDrainFlux;
 			} else if (GetVariable(i)->Type == FORWARD_DRAIN_FLUX) {
-				if (InParameters->MaxDrainFlux > 0) {
-					SecondNetworkVariables[GetVariable(i)->Index]->UpperBound = InParameters->MaxDrainFlux;
+				if (maxDrainFlux > 0) {
+					SecondNetworkVariables[GetVariable(i)->Index]->UpperBound = maxDrainFlux;
 				} else {
 					SecondNetworkVariables[GetVariable(i)->Index]->UpperBound = 0;
 				}
@@ -7142,8 +7152,8 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 					SecondNetworkVariables[GetVariable(i)->Index]->LowerBound = 0;
 				}
 			} else if (GetVariable(i)->Type == REVERSE_DRAIN_FLUX) {
-				if (InParameters->MaxDrainFlux < 0) {
-					SecondNetworkVariables[GetVariable(i)->Index]->LowerBound = -InParameters->MaxDrainFlux;
+				if (maxDrainFlux < 0) {
+					SecondNetworkVariables[GetVariable(i)->Index]->LowerBound = -maxDrainFlux;
 				} else {
 					SecondNetworkVariables[GetVariable(i)->Index]->LowerBound = 0;
 				}
@@ -7155,45 +7165,47 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 			}
 		}
 		//Loading gap generation media
-		FileBounds* NewBounds = ReadBounds(GetParameter("Gap generation media"));
-		for (int i=0; i < int(NewBounds->VarName.size()); i++) {
-			if (NewBounds->VarType[i] == DRAIN_FLUX) {
-				Species* MediaSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
-				if (MediaSpecies != NULL) {
-					MFAVariable* TempVariable = MediaSpecies->GetMFAVar(DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
-					if (TempVariable != NULL) {
-						TempVariable = SecondNetworkVariables[TempVariable->Index];
-						TempVariable->UpperBound = NewBounds->VarMax[i];
-						TempVariable->LowerBound = NewBounds->VarMin[i];
-					} else {
-						TempVariable = MediaSpecies->GetMFAVar(FORWARD_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+		if (GetParameter("Gap generation media").compare("Complete") != 0) {
+			FileBounds* NewBounds = ReadBounds(GetParameter("Gap generation media"));
+			for (int i=0; i < int(NewBounds->VarName.size()); i++) {
+				if (NewBounds->VarType[i] == DRAIN_FLUX) {
+					Species* MediaSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
+					if (MediaSpecies != NULL) {
+						MFAVariable* TempVariable = MediaSpecies->GetMFAVar(DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
 						if (TempVariable != NULL) {
 							TempVariable = SecondNetworkVariables[TempVariable->Index];
-							if (NewBounds->VarMax[i] > 0) {
-								TempVariable->UpperBound = NewBounds->VarMax[i];
-								if (NewBounds->VarMin[i] > 0) {
-									TempVariable->LowerBound = NewBounds->VarMin[i];
-								} else {
-									TempVariable->LowerBound = 0;
-								}
-							} else {
-								TempVariable->UpperBound = 0;
-								TempVariable->LowerBound = 0;
-							}
-						}
-						TempVariable = MediaSpecies->GetMFAVar(REVERSE_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
-						if (TempVariable != NULL) {
-							TempVariable = SecondNetworkVariables[TempVariable->Index];
-							if (NewBounds->VarMin[i] < 0) {
-								TempVariable->UpperBound = -NewBounds->VarMin[i];
+							TempVariable->UpperBound = NewBounds->VarMax[i];
+							TempVariable->LowerBound = NewBounds->VarMin[i];
+						} else {
+							TempVariable = MediaSpecies->GetMFAVar(FORWARD_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+							if (TempVariable != NULL) {
+								TempVariable = SecondNetworkVariables[TempVariable->Index];
 								if (NewBounds->VarMax[i] > 0) {
-									TempVariable->LowerBound = 0;
+									TempVariable->UpperBound = NewBounds->VarMax[i];
+									if (NewBounds->VarMin[i] > 0) {
+										TempVariable->LowerBound = NewBounds->VarMin[i];
+									} else {
+										TempVariable->LowerBound = 0;
+									}
 								} else {
-									TempVariable->LowerBound = -NewBounds->VarMax[i];
+									TempVariable->UpperBound = 0;
+									TempVariable->LowerBound = 0;
 								}
-							} else {
-								TempVariable->UpperBound = 0;
-								TempVariable->LowerBound = 0;
+							}
+							TempVariable = MediaSpecies->GetMFAVar(REVERSE_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+							if (TempVariable != NULL) {
+								TempVariable = SecondNetworkVariables[TempVariable->Index];
+								if (NewBounds->VarMin[i] < 0) {
+									TempVariable->UpperBound = -NewBounds->VarMin[i];
+									if (NewBounds->VarMax[i] > 0) {
+										TempVariable->LowerBound = 0;
+									} else {
+										TempVariable->LowerBound = -NewBounds->VarMax[i];
+									}
+								} else {
+									TempVariable->UpperBound = 0;
+									TempVariable->LowerBound = 0;
+								}
 							}
 						}
 					}
@@ -7228,34 +7240,37 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 	AddObjective(NewObjective);
 	SetMax();
 	ResetIndecies();
-
-	//ResetSolver();
-	//Status = LoadSolver(true);
-	//if (Status != SUCCESS) {
-	//	Note.append("Problem failed to load into solver");
-	//	PrintProblemReport(FLAG,InParameters,Note);
-	//	return FAIL;
-	//}
-
-	////Running the solver and obtaining and checking the solution returned.
-	//NewSolution = RunSolver(true,true,true);
-
-	//return SUCCESS;
-
 	vector<int> VariableTypes;
 	VariableTypes.push_back(OBJECTIVE_TERMS);
 	ResetSolver();
 	LoadSolver();
 
-	//Printing the LP file rather than solving
-	if (GetParameter("just print LP file").compare("1") == 0) {
-		PrintVariableKey();
-		WriteLPFile();
-		return SUCCESS;
-	}
-	if (RecursiveMILP(InData,InParameters,VariableTypes,true) <= 0) {
+	int solutionCount = this->FNumSolutions();
+	if (RecursiveMILP(InData,InParameters,VariableTypes,false) <= 0) {
 		Note.append("No gap generation solution exists.");
 		PrintProblemReport(FLAG,InParameters,Note);
+	} else {
+		ofstream Output;
+		OpenOutput(Output,FOutputFilepath()+"GapGenerationReport.txt",true);
+		Output << "Objective\tReactions" << endl;
+		for (int i=solutionCount; i < this->FNumSolutions(); i++) {
+			OptSolutionData* newSolution = this->GetSolution(i);
+			if (newSolution->Notes.compare("Recursive milp solution") == 0) {
+				bool First = true;
+				Output << newSolution->Objective << "\t";
+				for (int j=0; j < int(NewObjective->Variables.size()); j++) {
+					if (newSolution->SolutionData[NewObjective->Variables[j]->Index] < 0.5 && NewObjective->Variables[j]->Type != COMPLEX_USE) {
+						if (!First) {
+							Output << ",";
+						}
+						Output << NewObjective->Variables[j]->Name;
+						First = false;
+					}
+				}
+				Output << endl;
+			}
+		}
+		Output.close();
 	}
 	return SUCCESS;
 }

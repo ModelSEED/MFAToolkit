@@ -145,6 +145,7 @@ public:
 	int MILPCoessentialityAnalysis(Data* InData, OptimizationParameter* InParameters, bool DoFindTightBounds, string &InNote, bool SubProblem);	
 	int RecursiveMILPStudy(Data* InData, OptimizationParameter* InParameters, bool DoFindTightBounds);
 	int IdentifyReactionLoops(Data* InData, OptimizationParameter* InParameters);
+	int LoadBiomassDrainReactions(Data* InData, OptimizationParameter* InParameters);
 	int LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters);
 	int GapFilling(Data* InData, OptimizationParameter* InParameters, string Label = "NONE");
 	int CompleteGapFilling(Data* InData, OptimizationParameter* InParameters);
