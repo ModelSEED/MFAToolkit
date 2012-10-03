@@ -241,7 +241,7 @@ int Reaction::ParseReactionEquation(string InString) {
 	//In case the reaction has the --> or <-- notation, I replace all instances of -- with =
 	InString = StringReplace(InString.data(),"--","=");
 	//Now I break up the reaction string into substrings using the delimiters []+=
-	vector<string>* DataList = StringToStrings(InString, " []+=");
+	vector<string>* DataList = StringToStrings(InString, " [+=");
 	//I set the type to reversible by default
 	Type = REVERSIBLE;
 
@@ -274,10 +274,8 @@ int Reaction::ParseReactionEquation(string InString) {
 		if (Current.compare(":") == 0) {
 			continue;
 		}
-		
-		//I check to see if the current string is specifying a compartment
-		CellCompartment* NewCompartment = GetCompartment(ConvertToLower((*DataList)[i]).data());
-		if (NewCompartment != NULL) {
+		if (Current.substr(Current.length()-1,1).compare("]") == 0 && GetCompartment(ConvertToLower(Current.substr(0,Current.length()-1)).data()) != NULL) {
+			CellCompartment* NewCompartment = GetCompartment(ConvertToLower(Current.substr(0,Current.length()-1)).data());
 			if (Reactant == NULL) {
 				Compartment = NewCompartment->Index;
 				SpeciesCompartment = 100;

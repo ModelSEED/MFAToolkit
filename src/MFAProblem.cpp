@@ -9086,9 +9086,11 @@ void MFAProblem::PrintSolutions(int StartIndex, int EndIndex,bool tightbounds) {
 			Output << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING);
 		} else if (GetVariable(i)->AssociatedSpecies != NULL) {
 			if (compoundIndecies.count(GetVariable(i)->AssociatedSpecies->GetData("DATABASE",STRING)+comp) == 0) {
-				compounds.push_back(GetVariable(i)->AssociatedSpecies);
-				compoundIndecies[GetVariable(i)->AssociatedSpecies->GetData("DATABASE",STRING)+comp] = compoundCount;
-				compoundCount++;
+				if (comp.compare("b") != 0) {
+					compounds.push_back(GetVariable(i)->AssociatedSpecies);
+					compoundIndecies[GetVariable(i)->AssociatedSpecies->GetData("DATABASE",STRING)+comp] = compoundCount;
+					compoundCount++;
+				}
 			}
 			Output << GetVariable(i)->AssociatedSpecies->GetData("DATABASE",STRING);
 		}
