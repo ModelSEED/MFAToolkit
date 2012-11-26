@@ -8161,16 +8161,14 @@ int MFAProblem::SoftConstraint(Data* InData) {
 
 	//Parsing reaction bounds into constraints
 	vector<string>* RxnBound = StringToStrings(GetParameter("Soft Constraint"),";");
-	if (RxnBound->size() <= 3) {
-		cerr << "No reaction specified as constrained!" << endl;
+	if (RxnBound->size() < 1) {
+		cerr << "Soft Constraint parameter not specified correctly!" << endl;
 		return FAIL;
 	}
-	string Model = (*RxnBound)[0];
-	string Index = (*RxnBound)[1];
-	double Kappa = atof((*RxnBound)[2].data());
+	double Kappa = atof((*RxnBound)[0].data());
 	map<string,map<string,double> > BoundMap;
 	cerr << "Kappa is " << Kappa << endl;
-	for (int i=3; i < int(RxnBound->size()); i++) {
+	for (int i=1; i < int(RxnBound->size()); i++) {
 		vector<string>* BoundPair = StringToStrings((*RxnBound)[i],":");
 	Reaction* CurrentReaction = InData->FindReaction("NAME;DATABASE;ENTRY",(*BoundPair)[0].data());
 		if (CurrentReaction != NULL) {
