@@ -8127,7 +8127,6 @@ int MFAProblem::SoftConstraint(Data* InData) {
 	OptimizationParameter* Parameters = ReadParameters();
 	//Adjusting settings for study
 	Parameters->DecomposeReversible = false;
-	Parameters->GeneConstraints = true;
 	Parameters->ReactionsUse = true;
 	Parameters->AllReactionsUse = true;
 	//Building problem
