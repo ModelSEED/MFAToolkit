@@ -8228,6 +8228,14 @@ int MFAProblem::SoftConstraint(Data* InData) {
 	PrintProblemReport(Solution->Objective,Parameters,Note);
 	delete RxnBound;
 
+	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
+	ofstream Output;
+	if (OpenOutput(Output,FOutputFilepath()+"PROMResult.txt")) {
+		Output << NewObjective->Variables[1]->Name <<"\t" <<NewObjective->Variables[1]->Value << endl; //print alpha
+		Output << NewObjective->Variables[2]->Name <<"\t" <<NewObjective->Variables[2]->Value << endl; //print beta
+		Output << "objectFraction\t" << objectFraction;
+		Output.close();
+	}
 	return SUCCESS;
 }
 
