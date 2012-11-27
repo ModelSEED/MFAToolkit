@@ -8166,7 +8166,6 @@ int MFAProblem::SoftConstraint(Data* InData) {
 	}
 	double Kappa = atof((*RxnBound)[0].data());
 	map<string,map<string,double> > BoundMap;
-	cerr << "Kappa is " << Kappa << endl;
 	for (int i=1; i < int(RxnBound->size()); i++) {
 		vector<string>* BoundPair = StringToStrings((*RxnBound)[i],":");
 	Reaction* CurrentReaction = InData->FindReaction("NAME;DATABASE;ENTRY",(*BoundPair)[0].data());
@@ -8226,9 +8225,6 @@ int MFAProblem::SoftConstraint(Data* InData) {
 		return FAIL;
 	}
 	
-	cerr << NewObjective->Variables[0]->Name <<": " <<NewObjective->Variables[0]->Value << endl;
-	cerr << NewObjective->Variables[1]->Name <<": " <<NewObjective->Variables[1]->Value << endl;
-	cerr << NewObjective->Variables[2]->Name <<": " <<NewObjective->Variables[2]->Value << endl;
 	PrintProblemReport(Solution->Objective,Parameters,Note);
 	delete RxnBound;
 
