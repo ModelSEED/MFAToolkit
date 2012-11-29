@@ -6231,7 +6231,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 				string tmpNote;
 				FailedReactions.push_back(InitialInactiveReactions[i]);
 				if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-					cerr << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
+					cout << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
 					output << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
 					output.close();
 				}	
@@ -6453,7 +6453,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 		}
 		//Printing result for reaction
 		if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-			cerr << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
+			cout << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
 			output << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
 			output.close();
 			if (firstSolution && GetParameter("Solve complete gapfilling only once").compare("1") == 0) {
