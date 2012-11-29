@@ -1182,7 +1182,7 @@ void Data::SearchForPathways() {
 
 void Data::PerformMFA() {
 	TransformToBiomassCompartment();
-	MakeDirectory((FOutputFilepath()+"MFAOutput/").data());
+	//MakeDirectory((FOutputFilepath()+"MFAOutput/").data());
 	
 	//Reading in the user-set parameters for the MFA
 	OptimizationParameter* NewParameters = ReadParameters();

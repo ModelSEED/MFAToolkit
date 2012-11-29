@@ -6226,7 +6226,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 				string tmpNote;
 				FailedReactions.push_back(InitialInactiveReactions[i]);
 				if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-					cerr << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
+					cout << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
 					output << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--" << endl;
 					output.close();
 				}	
@@ -6449,7 +6449,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 		}
 		//Printing result for reaction
 		if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-			cerr << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
+			cout << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
 			output << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
 			output.close();
 			if (firstSolution && GetParameter("Solve complete gapfilling only once").compare("1") == 0) {
@@ -8123,7 +8123,6 @@ int MFAProblem::SoftConstraint(Data* InData) {
 	OptimizationParameter* Parameters = ReadParameters();
 	//Adjusting settings for study
 	Parameters->DecomposeReversible = false;
-	Parameters->GeneConstraints = true;
 	Parameters->ReactionsUse = true;
 	Parameters->AllReactionsUse = true;
 	//Building problem
@@ -8157,16 +8156,13 @@ int MFAProblem::SoftConstraint(Data* InData) {
 
 	//Parsing reaction bounds into constraints
 	vector<string>* RxnBound = StringToStrings(GetParameter("Soft Constraint"),";");
-	if (RxnBound->size() <= 3) {
-		cerr << "No reaction specified as constrained!" << endl;
+	if (RxnBound->size() < 1) {
+		cerr << "Soft Constraint parameter not specified correctly!" << endl;
 		return FAIL;
 	}
-	string Model = (*RxnBound)[0];
-	string Index = (*RxnBound)[1];
-	double Kappa = atof((*RxnBound)[2].data());
+	double Kappa = atof((*RxnBound)[0].data());
 	map<string,map<string,double> > BoundMap;
-	cerr << "Kappa is " << Kappa << endl;
-	for (int i=3; i < int(RxnBound->size()); i++) {
+	for (int i=1; i < int(RxnBound->size()); i++) {
 		vector<string>* BoundPair = StringToStrings((*RxnBound)[i],":");
 	Reaction* CurrentReaction = InData->FindReaction("NAME;DATABASE;ENTRY",(*BoundPair)[0].data());
 		if (CurrentReaction != NULL) {
@@ -8225,12 +8221,17 @@ int MFAProblem::SoftConstraint(Data* InData) {
 		return FAIL;
 	}
 	
-	cerr << NewObjective->Variables[0]->Name <<": " <<NewObjective->Variables[0]->Value << endl;
-	cerr << NewObjective->Variables[1]->Name <<": " <<NewObjective->Variables[1]->Value << endl;
-	cerr << NewObjective->Variables[2]->Name <<": " <<NewObjective->Variables[2]->Value << endl;
 	PrintProblemReport(Solution->Objective,Parameters,Note);
 	delete RxnBound;
 
+	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
+	ofstream Output;
+	if (OpenOutput(Output,FOutputFilepath()+"PROMResult.txt")) {
+		Output << NewObjective->Variables[1]->Name <<"\t" <<NewObjective->Variables[1]->Value << endl; //print alpha
+		Output << NewObjective->Variables[2]->Name <<"\t" <<NewObjective->Variables[2]->Value << endl; //print beta
+		Output << "objectFraction\t" << objectFraction;
+		Output.close();
+	}
 	return SUCCESS;
 }
 
