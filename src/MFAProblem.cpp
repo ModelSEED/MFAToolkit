@@ -6057,7 +6057,6 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 		if (GetParameter("dissapproved compartments").compare("none") != 0) {
 			DissapprovedCompartments = StringToStrings(GetParameter("dissapproved compartments"),";");
 		}
-		this->LoadBiomassDrainReactions(InData,InParameters);
 		//Iterating through the list and loading any reaction that is not already present in the model		
 		StringDBTable* rxntbl = GetStringDB()->get_table("reaction");
 		if (rxntbl == NULL) {
@@ -6150,11 +6149,6 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			InitialInactiveVar[InitialInactiveReactions[i]] = tempRxn;
 		}
 	}
-	for (int i=0; i < int(InParameters->ExchangeSpecies.size()); i++) {
-		if (InParameters->ExchangeMin[i] < 0) {
-			InitialInactiveReactions.push_back("drn"+InParameters->ExchangeSpecies[i]);
-		}
-	}
 	//Clearing the problem if it already exists
 	if (FNumVariables() > 0) {
 		ClearConstraints();	
@@ -6163,6 +6157,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	}
 	ClearSolutions();
 	//First we load the complete reaction list from file
+	this->LoadBiomassDrainReactions(InData,InParameters);
 	if (GetParameter("Add DB reactions for gapfilling").compare("1") == 0) {
 		if (this->LoadGapFillingReactions(InData,InParameters) != SUCCESS) {
 			return FAIL;
@@ -6279,6 +6274,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	LinEquation* oldObjective = InitializeLinEquation("Gapfilling objective");
 	vector<vector<int> > InactiveObjectiveIndecies(InactiveReactions.size());
 	for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = VariableCoefficients.begin(); mapIT != VariableCoefficients.end(); mapIT++) {
+		cout << mapIT->second << " " << mapIT->first->AssociatedReaction->GetData("DATABASE",STRING) << " " << ConvertVariableType(mapIT->first->Type) << endl;
 		oldObjective->Variables.push_back(mapIT->first);
 		oldObjective->Coefficient.push_back(mapIT->second);
 		if (mapIT->second < 0) {
@@ -6488,7 +6484,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 							VariableCoefficients[currVar] = atof((*strings)[2].data());
 						}
 					}
-				} else if ((*strings)[0].compare("forward") == 0) {
+				} else if ((*strings)[0].compare("reverse") == 0) {
 					Reaction* currReaction = InData->FindReaction("DATABASE",(*strings)[1].data());
 					if (currReaction != NULL) {
 						MFAVariable* currVar = currReaction->GetMFAVar(REVERSE_USE);
@@ -6720,7 +6716,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 					}
 				}
 				FLogFile() << InData->GetReaction(i)->GetData("DATABASE",STRING) << "\t" << InData->GetReaction(i)->GetData("PENALTY",STRING) << "\t" << ForwardPenalty << "\t" << BackwardPenalty << endl;
-			} else {
+			} else if (InData->GetReaction(i)->GetData("BIOMASS DRAIN REACTION",STRING).compare("") == 0) {
 				double ForwardPenalty = 0;
 				double BackwardPenalty = 0;
 				double ThermodynamicPenalty = atof(GetParameter("directionality penalty").data());
