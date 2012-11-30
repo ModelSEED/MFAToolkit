@@ -6050,7 +6050,6 @@ int MFAProblem::LoadBiomassDrainReactions(Data* InData, OptimizationParameter* I
 int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters) {
 	if (InData->GetData("Reaction list loaded",STRING).length() == 0) {
 		InData->AddData("Reaction list loaded","YES",STRING);
-
 		vector<string>* AllowedUnbalancedReactions = StringToStrings(GetParameter("Allowable unbalanced reactions"),",");
 		//Getting dissapproved compartment list
 		vector<string>* DissapprovedCompartments = NULL;
@@ -6068,7 +6067,6 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 		for (int i=0; i < rxntbl->number_of_objects();i++) {
 			StringDBObject* rxnobj = rxntbl->get_object(i);
 			string RxnId = rxnobj->get("id");
-
 			//Making sure the reaction is not on the KO list
 			bool AddReaction = true;
 			for (int j=0; j < int(InParameters->KOReactions.size()); j++) {
@@ -6080,7 +6078,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 
 			//Test to see if reaction is not in model
 			if (AddReaction && InData->FindReaction("DATABASE",RxnId.data()) != NULL) {
-			  AddReaction = false;
+				AddReaction = false;
 			}
 			  
 			//Test status for OK flag
@@ -6090,8 +6088,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			}
 
 			if(AddReaction){
-
-			        Reaction* NewReaction = new Reaction(RxnId,InData);
+				Reaction* NewReaction = new Reaction(RxnId,InData);
 				
 				//Checking that only approved compartments are involved in the reaction
 				bool ContainsDissapprovedCompartments = false;
@@ -6752,20 +6749,22 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 		}
 		//Adding coefficients to force on inactive reaction
 		double inactiveCoefficient = atof(GetParameter("Reaction activation bonus").data());
-		for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
-			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(REACTION_USE);
-				if (currVar == NULL) {
-					currVar = mapIT->second->GetMFAVar(FORWARD_USE);
+		if (inactiveCoefficient != 0) {
+			for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
+				if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
+					MFAVariable* currVar = mapIT->second->GetMFAVar(REACTION_USE);
+					if (currVar == NULL) {
+						currVar = mapIT->second->GetMFAVar(FORWARD_USE);
+					}
+					if (currVar != NULL) {
+						VariableCoefficients[currVar] = -inactiveCoefficient;
+					}
 				}
-				if (currVar != NULL) {
-					VariableCoefficients[currVar] = -inactiveCoefficient;
-				}
-			}
-			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(REVERSE_USE);
-				if (currVar != NULL) {
-					VariableCoefficients[currVar] = -inactiveCoefficient;
+				if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
+					MFAVariable* currVar = mapIT->second->GetMFAVar(REVERSE_USE);
+					if (currVar != NULL) {
+						VariableCoefficients[currVar] = -inactiveCoefficient;
+					}
 				}
 			}
 		}
@@ -6927,7 +6926,7 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 		ClearVariables();
 	}
 	//Loading biomass component reactions, which provide for new components in biomass
-	this->LoadBiomassDrainReactions(InData,InParameters);
+	//this->LoadBiomassDrainReactions(InData,InParameters);
 	BuildMFAProblem(InData,InParameters);
 
 	//Adding the objective to the original problem

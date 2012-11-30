@@ -1899,6 +1899,7 @@ void Data::TransformToBiomassCompartment() {
 			newReaction->AddReactant(reactant,1,GetCompartment("b")->Index);
 			newReaction->SetType(FORWARD);
 			newReaction->SetData("DATABASE",(reactant->GetData("DATABASE",STRING)+"BiomassReactant").data(),STRING);
+			newReaction->SetData("BIOMASS DRAIN REACTION","yes",STRING);
 			this->AddReaction(newReaction);
 		}
 	}
@@ -1910,6 +1911,7 @@ void Data::TransformToBiomassCompartment() {
 			newReaction->AddReactant(reactant,1,ITT->first);
 			newReaction->SetType(FORWARD);
 			newReaction->SetData("DATABASE",(reactant->GetData("DATABASE",STRING)+"BiomassProduct").data(),STRING);
+			newReaction->SetData("BIOMASS DRAIN REACTION","yes",STRING);
 			this->AddReaction(newReaction);
 		}
 	}
