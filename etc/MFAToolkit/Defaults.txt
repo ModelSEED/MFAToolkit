@@ -254,4 +254,4 @@ hope scenarios filename|../etc/MFAToolkit/HopeScenarios.txt|0|MFA parameters
 database root output directory|../tmp/|0|MFA parameters
 database root input directory|../etc/MFAToolkit/|0|MFA parameters
 molfile directory|../etc/MFAToolkit/mol/|0/MFA parameters
-cue directory|../etc/MFAToolkit/cues/|0/MFA parameters
+cue directory|/vol/model-dev/MODEL_DEV_DB/ReactionDB/cues/|0/MFA parameters
