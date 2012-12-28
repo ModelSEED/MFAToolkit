@@ -124,7 +124,7 @@ Always relax integer variables|0|Tell the toolkiit to always relax integer varia
 Decompose reversible reactions|0|This binary parameter indicates whether or not reversible reactions in the model should be decomposed into separate forward and backward reactions.|MFA parameters
 Decompose reversible drain fluxes|0|This binary parameter indicates whether or not reversible drain fluxes in the model should be decomposed into separate forward and backward drain fluxes.|MFA parameters
 Run alternative solution algorithm|0|0|MFA parameters
-Recursive MILP solution size interval|3|0|MFA parameters
+Recursive MILP solution size interval|1000000000|0|MFA parameters
 Recursive MILP solution limit|10|0|MFA parameters
 Recursive MILP timeout|1800|0|MFA parameters
 CPLEX solver time limit|86400|1|MFA parameters

@@ -6399,42 +6399,49 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 					WriteLPFile();
 					return SUCCESS;
 				}
-				OptSolutionData* solution = RunSolver(false,false,true);
-				if (solution->Status == SUCCESS) {
-					string sign;
-					map<Reaction*,bool,std::less<Reaction*> > activatedReactions;
-					for (int j=0; j < int(oldObjective->Variables.size()); j++) {
-						if (oldObjective->Coefficient[j] > 0 && solution->SolutionData[oldObjective->Variables[j]->Index] > 0.5) {
-							if (gapfilled.length() > 0) {
-								gapfilled.append(";");
+				vector<int> VariableTypes;
+				VariableTypes.push_back(OBJECTIVE_TERMS);
+				int TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
+				//Printing the gap filling output
+				if (TotalSolution > 0) {
+					//Parsing solution results
+					vector<string>* SolutionArray = StringToStrings(GetParameter("Current gap filling solutions"),"|");
+					string SolutionCosts;
+					string Solutions;
+					//Printing the run results
+					double Cost = 0;
+					for (int k=0; k < int(SolutionArray->size()); k++) {
+						if ((*SolutionArray)[k].length() > 0) {
+							vector<string>* SolutionDataArray = StringToStrings((*SolutionArray)[k],":");
+							double Cost = atof((*SolutionDataArray)[0].data());
+							if (Cost > MFA_ZERO_TOLERANCE) {
+								if (gapfilled.length() > 0) {
+									gapfilled.append("|");
+								}
+								gapfilled.append((*SolutionDataArray)[1]);
+								map<Reaction*,bool,std::less<Reaction*> > activatedReactions;
+								vector<string>* SolutionReactions = StringToStrings((*SolutionDataArray)[1],",");
+								string currentGapfilling("");
+								for (int j=0; j < int(SolutionReactions->size()); j++) {
+									if (currentGapfilling.length() > 0) {
+										currentGapfilling.append(";");
+									}
+									currentGapfilling.append((*SolutionReactions)[j]);
+									//TODO: Handle activated reactions
+									//activated.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
+									//activatedReactions[oldObjective->Variables[j]->AssociatedReaction] = true;
+								}
+								delete SolutionReactions;
 							}
-							sign = "+";
-							if (oldObjective->Variables[j]->Type == REVERSE_USE) {
-								sign = "-";
-							}
-							gapfilled.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
-							if (oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING).length() == 0) {
-								gapfilled.append(oldObjective->Variables[j]->AssociatedReaction->CreateReactionEquation("DATABASE"));
-							}
-							oldObjective->Coefficient[j] = 0;
-						} else if (oldObjective->Coefficient[j] < 0 && solution->SolutionData[oldObjective->Variables[j]->Index] > 0.5) {
-							if (activated.length() > 0) {
-								activated.append(";");
-							}
-							sign = "+";
-							if (oldObjective->Variables[j]->Type == REVERSE_USE) {
-								sign = "-";
-							}
-							activated.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
-							activatedReactions[oldObjective->Variables[j]->AssociatedReaction] = true;
+							delete SolutionDataArray;
 						}
 					}
+					delete SolutionArray;
 					Repaired[i] = count;
 				} else {
 					gapfilled = "FAILED";
 					activated = "NONE";
 				}
-				delete solution;
 				count++;
 			} else {
 				gapfilled = "UNNEEDED";
