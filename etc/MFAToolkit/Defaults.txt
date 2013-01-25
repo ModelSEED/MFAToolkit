@@ -126,8 +126,8 @@ Decompose reversible drain fluxes|0|This binary parameter indicates whether or n
 Run alternative solution algorithm|0|0|MFA parameters
 Recursive MILP solution size interval|1000000000|0|MFA parameters
 Recursive MILP solution limit|10|0|MFA parameters
-Recursive MILP timeout|1800|0|MFA parameters
-CPLEX solver time limit|86400|1|MFA parameters
+Recursive MILP timeout|18000|0|MFA parameters
+CPLEX solver time limit|3600|1|MFA parameters
 solver memory limit|1000|1|MFA parameters
 Mass balance constraints|1|This binary parameter indicates whether or not mass-balance constraints should be used.|MFA parameters
 Thermodynamic constraints|0|This binary parameter indicates whether or not thermodynamic constraints should be used. Using thermodynamic constraints automatically turns on use variables. |MFA parameters
