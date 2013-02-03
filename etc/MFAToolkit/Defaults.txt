@@ -117,7 +117,7 @@ Reactions that should always be active|none|A list of reactions for which no use
 Reactions that are always blocked|none|A list of reactions which should be removed from the problem because they are always blocked.|MFA parameters
 Add use variables for any drain fluxes|0|This binary parameter indicates whether or not a use variable should be added for each drain flux. Using drain use variables automatically turns on drain flux decomposition.|MFA parameters
 Add positive use variable constraints|0|Binary parameter indicating if constraints should be added to force reactions to be active when use variables are on
-Minimum flux for use variable positive constraint|0.01|0|MFA parameters
+Minimum flux for use variable positive constraint|5|0|MFA parameters
 Force use variables for all drain fluxes|0|This binary parameter indicates whether or not use variables should be added for every drain flux and not just the drain fluxes that can be inactive (flux bounds include 0).|MFA parameters
 relax integer variables when possible|0|Tells the solver to relax integer variables whenever this relaxation is not expected to impact the final solution. Ie: finding tight bounds before minimizing the number of reactions.|MFA parameters
 Always relax integer variables|0|Tell the toolkiit to always relax integer variables no matter what.|MFA parameters

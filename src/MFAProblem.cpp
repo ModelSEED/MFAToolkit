@@ -3443,7 +3443,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 			if (WTgrowth < 1e-7) {
 				string note;
 				if (InParameters->OptimizeMetabolitesWhenZero) {
-					CheckIndividualMetaboliteProduction(InData,InParameters,GetParameter("metabolites to optimize"),false,false,note,true);
+					//CheckIndividualMetaboliteProduction(InData,InParameters,GetParameter("metabolites to optimize"),false,false,note,true);
 					noGrowth = GetParameter("No growth metabolites");
 				}
 			} else {
