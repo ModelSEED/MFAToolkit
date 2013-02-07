@@ -2357,6 +2357,11 @@ OptSolutionData* ParseSCIPSolution(string Filename,vector<MFAVariable*> Variable
 					NewSolution->Status = SUCCESS;
 				} else if (((*Strings)[2]+(*Strings)[3]+(*Strings)[4]+(*Strings)[5]+(*Strings)[6]+(*Strings)[7]+(*Strings)[8]).compare(":solvingwasinterrupted[timelimitreached]") == 0) {
 					NewSolution->Status = SUCCESS;
+					ofstream suboptOut;
+					if (OpenOutput(suboptOut,(FOutputFilepath()+"suboptimalSolutions.txt").data())) {
+						suboptOut << "suboptimal!" << endl;
+						suboptOut.close();
+					}
 				}
 			} else if (Strings->size() >= 3 && (*Strings)[0].compare("objective") == 0 && (*Strings)[1].compare("value:") == 0) {
 				NewSolution->Objective = atof((*Strings)[2].data());
