@@ -3412,7 +3412,10 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		delete strings;
 	}
 	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(-10000,GREATER);
+	this->LoadSolver();
+	string lastmedia;
 	for (int i=0; i < int(InParameters->labels.size()); i++) {
+		cout << "Now simulating " << i << " of " << InParameters->labels.size() << endl;
 		double WTgrowth = 0;
 		double growth = 0;
 		string fluxes("none");
@@ -3434,7 +3437,6 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		}
 		ObjFunct = NULL;
 		this->AddObjective(originalObjective);
-		this->LoadSolver();
 		LoadObjective();
 		NewSolution = RunSolver(false,true,false);
 		vector<Reaction*> KOReactions;
