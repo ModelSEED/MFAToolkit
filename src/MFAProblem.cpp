@@ -6474,6 +6474,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 }
 
 int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients) {
+	map<MFAVariable*,double,std::less<MFAVariable*> > FileCoefficients;
 	if (GetParameter("Objective coefficient file").compare("NONE") != 0) {
 		vector<string> CoefficientList = ReadStringsFromFile(FOutputFilepath()+GetParameter("Objective coefficient file"),false);
 		for (int i=1; i < int(CoefficientList.size()); i++) {
@@ -6502,281 +6503,289 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 			}
 			delete strings;
 		}
-	} else {
-		//Loading subsystem data from file
-		map<string, double, std::less<string> > SubsystemReactions;
-		map<string, double, std::less<string> > SubsystemModelReactions;
-		//Loadining scenario data from file
-		map<string, double, std::less<string> > ScenarioReactions;
-		map<string, double, std::less<string> > ScenarioModelReactions;
-		ifstream Input;
-		if (OpenInput(Input,GetParameter("Function mapping filename"))) {
-			GetFileLine(Input);
-			do {
-				vector<string>* Strings  = GetStringsFileline(Input,"\t");
-				if (Strings->size() < 3 || (*Strings)[0].length() == 0 || (*Strings)[2].length() == 0) {
-					delete Strings;
-					break;
-				}
-				Reaction* SubsystemReaction = InData->FindReaction("DATABASE",(*Strings)[0].data());
-				if (SubsystemReaction != NULL) {
-					SubsystemReaction->AddData("FUNCTIONAL ROLE",(*Strings)[1].data(),STRING);
-					if ((*Strings)[2].compare("NONE") != 0) {
-						if (SubsystemReactions.count((*Strings)[2]) == 0) {
-							SubsystemReactions[(*Strings)[2]] = 0;
-						}
-						SubsystemReactions[(*Strings)[2]]++;
-						if (SubsystemReaction->GetData("FOREIGN",STRING).length() == 0) {
-							if (SubsystemModelReactions.count((*Strings)[2]) == 0) {
-								SubsystemModelReactions[(*Strings)[2]] = 0;
-							}
-							SubsystemModelReactions[(*Strings)[2]]++;
-						}
-						SubsystemReaction->AddData("SUBSYSTEMS",(*Strings)[2].data(),STRING);
-					}
-				}
-				delete Strings;
-			} while(!Input.eof());
-			Input.close();
+		if (GetParameter("Use coefficient file exclusively").compare("1") == 0) {
+			for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = FileCoefficients.begin(); mapIT != FileCoefficients.end(); mapIT++) {
+				VariableCoefficients[mapIT->first] = mapIT->second;
+			}
+			return SUCCESS;
 		}
-		if (OpenInput(Input,GetParameter("Reaction database filename"))) {
+	}
+	//Loading subsystem data from file
+	map<string, double, std::less<string> > SubsystemReactions;
+	map<string, double, std::less<string> > SubsystemModelReactions;
+	//Loadining scenario data from file
+	map<string, double, std::less<string> > ScenarioReactions;
+	map<string, double, std::less<string> > ScenarioModelReactions;
+	ifstream Input;
+	if (OpenInput(Input,GetParameter("Function mapping filename"))) {
+		GetFileLine(Input);
+		do {
 			vector<string>* Strings  = GetStringsFileline(Input,"\t");
-			int KeggMapColumn = int(FLAG);
-			for (int i=0; i < int(Strings->size()); i++) {
-				if ((*Strings)[i].compare("KEGG MAPS") == 0) {
-					KeggMapColumn = i;
-					break;
+			if (Strings->size() < 3 || (*Strings)[0].length() == 0 || (*Strings)[2].length() == 0) {
+				delete Strings;
+				break;
+			}
+			Reaction* SubsystemReaction = InData->FindReaction("DATABASE",(*Strings)[0].data());
+			if (SubsystemReaction != NULL) {
+				SubsystemReaction->AddData("FUNCTIONAL ROLE",(*Strings)[1].data(),STRING);
+				if ((*Strings)[2].compare("NONE") != 0) {
+					if (SubsystemReactions.count((*Strings)[2]) == 0) {
+						SubsystemReactions[(*Strings)[2]] = 0;
+					}
+					SubsystemReactions[(*Strings)[2]]++;
+					if (SubsystemReaction->GetData("FOREIGN",STRING).length() == 0) {
+						if (SubsystemModelReactions.count((*Strings)[2]) == 0) {
+							SubsystemModelReactions[(*Strings)[2]] = 0;
+						}
+						SubsystemModelReactions[(*Strings)[2]]++;
+					}
+					SubsystemReaction->AddData("SUBSYSTEMS",(*Strings)[2].data(),STRING);
 				}
 			}
 			delete Strings;
-			do {
-				Strings  = GetStringsFileline(Input,";");
-				if (int(Strings->size()) > KeggMapColumn && (*Strings)[0].length() == 8 && (*Strings)[KeggMapColumn].length() > 0) {
-					Reaction* SubsystemReaction = InData->FindReaction("DATABASE",(*Strings)[0].data());
-					if (SubsystemReaction != NULL) {
-						SubsystemReaction->AddData("KEGG MAPP",(*Strings)[KeggMapColumn].data(),STRING);
-					}
-				}
-				delete Strings;
-			} while(!Input.eof());
-			Input.close();
+		} while(!Input.eof());
+		Input.close();
+	}
+	if (OpenInput(Input,GetParameter("Reaction database filename"))) {
+		vector<string>* Strings  = GetStringsFileline(Input,"\t");
+		int KeggMapColumn = int(FLAG);
+		for (int i=0; i < int(Strings->size()); i++) {
+			if ((*Strings)[i].compare("KEGG MAPS") == 0) {
+				KeggMapColumn = i;
+				break;
+			}
 		}
-		if (OpenInput(Input,GetParameter("hope scenarios filename"))) {
-			GetFileLine(Input);
-			do {
-				vector<string>* Strings  = GetStringsFileline(Input,"\t");
-				if (Strings->size() == 0 || (*Strings)[0].length() == 0) {
-					delete Strings;
-					break;
+		delete Strings;
+		do {
+			Strings  = GetStringsFileline(Input,";");
+			if (int(Strings->size()) > KeggMapColumn && (*Strings)[0].length() == 8 && (*Strings)[KeggMapColumn].length() > 0) {
+				Reaction* SubsystemReaction = InData->FindReaction("DATABASE",(*Strings)[0].data());
+				if (SubsystemReaction != NULL) {
+					SubsystemReaction->AddData("KEGG MAPP",(*Strings)[KeggMapColumn].data(),STRING);
 				}
-				if (ScenarioReactions.count((*Strings)[0]) == 0) {
-					ScenarioReactions[(*Strings)[0]] = 0;
-				}
-				ScenarioReactions[(*Strings)[0]]++;
-				if (Strings->size() >= 2 && (*Strings)[0].length() > 0 && (*Strings)[1].length() > 0) {
-					Reaction* SubsystemReaction = InData->FindReaction("KEGG",(*Strings)[1].data());
-					if (SubsystemReaction != NULL) {
-						if (SubsystemReaction->GetData("FOREIGN",STRING).length() == 0) {
-							if (ScenarioModelReactions.count((*Strings)[0]) == 0) {
-								ScenarioModelReactions[(*Strings)[0]] = 0;
-							}
-							ScenarioModelReactions[(*Strings)[0]]++;
+			}
+			delete Strings;
+		} while(!Input.eof());
+		Input.close();
+	}
+	if (OpenInput(Input,GetParameter("hope scenarios filename"))) {
+		GetFileLine(Input);
+		do {
+			vector<string>* Strings  = GetStringsFileline(Input,"\t");
+			if (Strings->size() == 0 || (*Strings)[0].length() == 0) {
+				delete Strings;
+				break;
+			}
+			if (ScenarioReactions.count((*Strings)[0]) == 0) {
+				ScenarioReactions[(*Strings)[0]] = 0;
+			}
+			ScenarioReactions[(*Strings)[0]]++;
+			if (Strings->size() >= 2 && (*Strings)[0].length() > 0 && (*Strings)[1].length() > 0) {
+				Reaction* SubsystemReaction = InData->FindReaction("KEGG",(*Strings)[1].data());
+				if (SubsystemReaction != NULL) {
+					if (SubsystemReaction->GetData("FOREIGN",STRING).length() == 0) {
+						if (ScenarioModelReactions.count((*Strings)[0]) == 0) {
+							ScenarioModelReactions[(*Strings)[0]] = 0;
 						}
-						SubsystemReaction->AddData("SCENARIOS",(*Strings)[0].data(),STRING);
+						ScenarioModelReactions[(*Strings)[0]]++;
 					}
+					SubsystemReaction->AddData("SCENARIOS",(*Strings)[0].data(),STRING);
 				}
-				delete Strings;
-			} while(!Input.eof());
-			Input.close();
-		}
+			}
+			delete Strings;
+		} while(!Input.eof());
+		Input.close();
+	}
 
-		//Marking all biomass components
-		for (int i=0; i < InData->FNumReactions(); i++) {
-			if (InData->GetReaction(i)->GetData("DATABASE",STRING).length() > 3 && InData->GetReaction(i)->GetData("DATABASE",STRING).substr(0,3).compare("bio") == 0) {
-				for (int j=0; j < InData->GetReaction(i)->FNumReactants(REACTANT); j++) {
-					InData->GetReaction(i)->GetReactant(j)->AddData("BIOMASS COMPONENT","YES",STRING);
-				}
+	//Marking all biomass components
+	for (int i=0; i < InData->FNumReactions(); i++) {
+		if (InData->GetReaction(i)->GetData("DATABASE",STRING).length() > 3 && InData->GetReaction(i)->GetData("DATABASE",STRING).substr(0,3).compare("bio") == 0) {
+			for (int j=0; j < InData->GetReaction(i)->FNumReactants(REACTANT); j++) {
+				InData->GetReaction(i)->GetReactant(j)->AddData("BIOMASS COMPONENT","YES",STRING);
 			}
 		}
-		for (int i=0; i < InData->FNumReactions(); i++) {
-			if (InData->GetReaction(i)->GetData("FOREIGN",STRING).compare("BiomassRxn") == 0) {
-				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
-				if (TempVariable != NULL) {
-					VariableCoefficients[TempVariable] = atof(GetParameter("Biomass component reaction penalty").data());
+	}
+	for (int i=0; i < InData->FNumReactions(); i++) {
+		if (InData->GetReaction(i)->GetData("FOREIGN",STRING).compare("BiomassRxn") == 0) {
+			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+			if (TempVariable != NULL) {
+				VariableCoefficients[TempVariable] = atof(GetParameter("Biomass component reaction penalty").data());
+			}
+		} else if (InData->GetReaction(i)->GetData("FOREIGN",STRING).length() > 0) {
+			double Coefficient = 1;
+			//Applying the non kegg reaction penalty
+			if (InData->GetReaction(i)->GetData("KEGG",DATABASE_LINK).length() == 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO KEGG,").data(),STRING);
+				Coefficient += atof(GetParameter("non KEGG reaction penalty").data());
+			}
+			//Applying the subsystem penalty and bonus
+			if (InData->GetReaction(i)->GetData("SUBSYSTEMS",STRING).length() == 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO SUBSYSTEM,").data(),STRING);
+				Coefficient += atof(GetParameter("no subsystem penalty").data());
+			} else {
+				//Applying the subsystem coverage bonus
+				double BestCoverage = 0;
+				vector<string> Subsystems = InData->GetReaction(i)->GetAllData("SUBSYSTEMS",STRING);
+				for (int j=0;j < int(Subsystems.size()); j++) {
+					double CurrentCoverage = SubsystemModelReactions[Subsystems[j]]/SubsystemReactions[Subsystems[j]];
+					if (CurrentCoverage > BestCoverage && CurrentCoverage <= 1) {
+						BestCoverage = CurrentCoverage;
+					}
 				}
-			} else if (InData->GetReaction(i)->GetData("FOREIGN",STRING).length() > 0) {
-				double Coefficient = 1;
-				//Applying the non kegg reaction penalty
-				if (InData->GetReaction(i)->GetData("KEGG",DATABASE_LINK).length() == 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO KEGG,").data(),STRING);
-					Coefficient += atof(GetParameter("non KEGG reaction penalty").data());
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SUBSYS COVERAGE,").data(),STRING);
+				Coefficient += -BestCoverage*atof(GetParameter("subsystem coverage bonus").data());
+			}
+			//Applying the scenario coverage bonus
+			if (InData->GetReaction(i)->GetData("SCENARIOS",STRING).length() > 0) {
+				double BestCoverage = 0;
+				vector<string> Subsystems = InData->GetReaction(i)->GetAllData("SCENARIOS",STRING);
+				for (int j=0;j < int(Subsystems.size()); j++) {
+					double CurrentCoverage = ScenarioModelReactions[Subsystems[j]]/ScenarioReactions[Subsystems[j]];
+					if (CurrentCoverage > BestCoverage && CurrentCoverage <= 1) {
+						BestCoverage = CurrentCoverage;
+					}
 				}
-				//Applying the subsystem penalty and bonus
-				if (InData->GetReaction(i)->GetData("SUBSYSTEMS",STRING).length() == 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO SUBSYSTEM,").data(),STRING);
-					Coefficient += atof(GetParameter("no subsystem penalty").data());
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SCENARIO COVERAGE,").data(),STRING);
+				Coefficient += -BestCoverage*atof(GetParameter("scenario coverage bonus").data());
+			}
+			//Applying no functional role penalty
+			if (InData->GetReaction(i)->GetData("FUNCTIONAL ROLE",STRING).length() == 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO ROLE,").data(),STRING);
+				Coefficient += atof(GetParameter("no functional role penalty").data());
+			}
+			//Applying no KEGG map penalty
+			if (InData->GetReaction(i)->GetData("KEGG MAPP",STRING).length() == 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO KEGG MAP,").data(),STRING);
+				Coefficient += atof(GetParameter("no KEGG map penalty").data());
+			}
+			//Applying the transporter penalty
+			bool Transport = false;
+			bool Stereo = false;
+			InData->GetReaction(i)->CheckForTransportOrStereo(Transport,Stereo);
+			if (Transport) {
+				if (InData->GetReaction(i)->FNumReactants() == 1) {
+					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SINGLE TRANSPORT,").data(),STRING);
+					Coefficient += atof(GetParameter("single compound transporter penalty").data());
+				}
+				bool BiomassTransporter = false;
+				for (int j=0; j < int(InData->GetReaction(i)->FNumReactants()); j++) {
+					if (InData->GetReaction(i)->GetReactantCompartment(j) != GetDefaultCompartment()->Index && InData->GetReaction(i)->GetReactant(j)->GetData("BIOMASS COMPONENT",STRING).length() > 0) {
+						BiomassTransporter = true;
+						break;
+					}
+				}
+				if (BiomassTransporter) {
+					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"BIOMASS TRANSPORT,").data(),STRING);
+					Coefficient += atof(GetParameter("biomass transporter penalty").data());
+				}
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"TRANSPORT,").data(),STRING);
+				Coefficient += atof(GetParameter("transporter penalty").data());
+			}
+			//Applying the no thermo penalty
+			double ThermodynamicPenalty = atof(GetParameter("directionality penalty").data());
+			if (InData->GetReaction(i)->FEstDeltaG() == FLAG) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO DELTAG,").data(),STRING);
+				Coefficient += atof(GetParameter("no delta G penalty").data());
+			}
+			if (InData->GetReaction(i)->FEstDeltaG() != FLAG) {
+				ThermodynamicPenalty += fabs(InData->GetReaction(i)->FEstDeltaG())/10;
+			} else {
+				ThermodynamicPenalty += 1.5;
+			}
+			//Applying the missing structure penalty
+			if (InData->GetReaction(i)->ContainsUnknownStructures() > 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"UNKNOWN STRUCTURE,").data(),STRING);
+				Coefficient += atof(GetParameter("unknown structure penalty").data());
+			}
+			//Applying the unbalanced penalty
+			if (InData->GetReaction(i)->GetData("UNBALANCED",STRING).length() > 0) {
+				InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"UNBALANCED,").data(),STRING);
+				Coefficient += atof(GetParameter("unbalanced penalty").data());
+			}
+			//Makeing sure the coefficient has a minimum value
+			if (Coefficient < 0.5) {
+				Coefficient = 0.5;
+			}
+			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+			double ForwardPenalty = 0;
+			double BackwardPenalty = 0;
+			if (TempVariable != NULL) {
+				if (InData->GetReaction(i)->FType() == FORWARD || InData->GetReaction(i)->FType() == REVERSIBLE) {
+					ForwardPenalty = Coefficient;
+					VariableCoefficients[TempVariable] = Coefficient;
 				} else {
-					//Applying the subsystem coverage bonus
-					double BestCoverage = 0;
-					vector<string> Subsystems = InData->GetReaction(i)->GetAllData("SUBSYSTEMS",STRING);
-					for (int j=0;j < int(Subsystems.size()); j++) {
-						double CurrentCoverage = SubsystemModelReactions[Subsystems[j]]/SubsystemReactions[Subsystems[j]];
-						if (CurrentCoverage > BestCoverage && CurrentCoverage <= 1) {
-							BestCoverage = CurrentCoverage;
-						}
-					}
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SUBSYS COVERAGE,").data(),STRING);
-					Coefficient += -BestCoverage*atof(GetParameter("subsystem coverage bonus").data());
+					ForwardPenalty = Coefficient+ThermodynamicPenalty;
+					VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
 				}
-				//Applying the scenario coverage bonus
-				if (InData->GetReaction(i)->GetData("SCENARIOS",STRING).length() > 0) {
-					double BestCoverage = 0;
-					vector<string> Subsystems = InData->GetReaction(i)->GetAllData("SCENARIOS",STRING);
-					for (int j=0;j < int(Subsystems.size()); j++) {
-						double CurrentCoverage = ScenarioModelReactions[Subsystems[j]]/ScenarioReactions[Subsystems[j]];
-						if (CurrentCoverage > BestCoverage && CurrentCoverage <= 1) {
-							BestCoverage = CurrentCoverage;
-						}
-					}
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SCENARIO COVERAGE,").data(),STRING);
-					Coefficient += -BestCoverage*atof(GetParameter("scenario coverage bonus").data());
-				}
-				//Applying no functional role penalty
-				if (InData->GetReaction(i)->GetData("FUNCTIONAL ROLE",STRING).length() == 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO ROLE,").data(),STRING);
-					Coefficient += atof(GetParameter("no functional role penalty").data());
-				}
-				//Applying no KEGG map penalty
-				if (InData->GetReaction(i)->GetData("KEGG MAPP",STRING).length() == 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO KEGG MAP,").data(),STRING);
-					Coefficient += atof(GetParameter("no KEGG map penalty").data());
-				}
-				//Applying the transporter penalty
-				bool Transport = false;
-				bool Stereo = false;
-				InData->GetReaction(i)->CheckForTransportOrStereo(Transport,Stereo);
-				if (Transport) {
-					if (InData->GetReaction(i)->FNumReactants() == 1) {
-						InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"SINGLE TRANSPORT,").data(),STRING);
-						Coefficient += atof(GetParameter("single compound transporter penalty").data());
-					}
-					bool BiomassTransporter = false;
-					for (int j=0; j < int(InData->GetReaction(i)->FNumReactants()); j++) {
-						if (InData->GetReaction(i)->GetReactantCompartment(j) != GetDefaultCompartment()->Index && InData->GetReaction(i)->GetReactant(j)->GetData("BIOMASS COMPONENT",STRING).length() > 0) {
-							BiomassTransporter = true;
-							break;
-						}
-					}
-					if (BiomassTransporter) {
-						InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"BIOMASS TRANSPORT,").data(),STRING);
-						Coefficient += atof(GetParameter("biomass transporter penalty").data());
-					}
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"TRANSPORT,").data(),STRING);
-					Coefficient += atof(GetParameter("transporter penalty").data());
-				}
-				//Applying the no thermo penalty
-				double ThermodynamicPenalty = atof(GetParameter("directionality penalty").data());
-				if (InData->GetReaction(i)->FEstDeltaG() == FLAG) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"NO DELTAG,").data(),STRING);
-					Coefficient += atof(GetParameter("no delta G penalty").data());
-				}
-				if (InData->GetReaction(i)->FEstDeltaG() != FLAG) {
-					ThermodynamicPenalty += fabs(InData->GetReaction(i)->FEstDeltaG())/10;
-				} else {
-					ThermodynamicPenalty += 1.5;
-				}
-				//Applying the missing structure penalty
-				if (InData->GetReaction(i)->ContainsUnknownStructures() > 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"UNKNOWN STRUCTURE,").data(),STRING);
-					Coefficient += atof(GetParameter("unknown structure penalty").data());
-				}
-				//Applying the unbalanced penalty
-				if (InData->GetReaction(i)->GetData("UNBALANCED",STRING).length() > 0) {
-					InData->GetReaction(i)->SetData("PENALTY",(InData->GetReaction(i)->GetData("PENALTY",STRING)+"UNBALANCED,").data(),STRING);
-					Coefficient += atof(GetParameter("unbalanced penalty").data());
-				}
-				//Makeing sure the coefficient has a minimum value
-				if (Coefficient < 0.5) {
-					Coefficient = 0.5;
-				}
-				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
-				double ForwardPenalty = 0;
-				double BackwardPenalty = 0;
-				if (TempVariable != NULL) {
-					if (InData->GetReaction(i)->FType() == FORWARD || InData->GetReaction(i)->FType() == REVERSIBLE) {
-						ForwardPenalty = Coefficient;
-						VariableCoefficients[TempVariable] = Coefficient;
-					} else {
-						ForwardPenalty = Coefficient+ThermodynamicPenalty;
-						VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
-					}
-				}
-				TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
-				if (TempVariable != NULL) {
-					if (InData->GetReaction(i)->FType() == FORWARD) {
-						BackwardPenalty = Coefficient+ThermodynamicPenalty;
-						VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
-					} else {
-						BackwardPenalty = Coefficient;
-						VariableCoefficients[TempVariable] = Coefficient;
-					}
-				}
-				FLogFile() << InData->GetReaction(i)->GetData("DATABASE",STRING) << "\t" << InData->GetReaction(i)->GetData("PENALTY",STRING) << "\t" << ForwardPenalty << "\t" << BackwardPenalty << endl;
-			} else if (InData->GetReaction(i)->GetData("BIOMASS DRAIN REACTION",STRING).compare("") == 0) {
-				double ForwardPenalty = 0;
-				double BackwardPenalty = 0;
-				double ThermodynamicPenalty = atof(GetParameter("directionality penalty").data());
-				if (InData->GetReaction(i)->FEstDeltaG() != FLAG) {
-					ThermodynamicPenalty += fabs(InData->GetReaction(i)->FEstDeltaG())/10;
-				} else {
-					ThermodynamicPenalty += 1.5;
-				}
+			}
+			TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
+			if (TempVariable != NULL) {
 				if (InData->GetReaction(i)->FType() == FORWARD) {
-					MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
-					if (TempVariable != NULL) {
-						VariableCoefficients[TempVariable] = ThermodynamicPenalty;
-						ForwardPenalty = ThermodynamicPenalty;
-					}
-				} else if (InData->GetReaction(i)->FType() == REVERSE) {
-					MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
-					if (TempVariable != NULL) {
-						VariableCoefficients[TempVariable] = ThermodynamicPenalty;
-						BackwardPenalty = ThermodynamicPenalty;
-					}
+					BackwardPenalty = Coefficient+ThermodynamicPenalty;
+					VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
+				} else {
+					BackwardPenalty = Coefficient;
+					VariableCoefficients[TempVariable] = Coefficient;
 				}
 			}
-			if (InParameters->ThermoConstraints && InParameters->ReactionErrorUseVariables) {
-				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(SMALL_DELTAG_ERROR_USE);
+			FLogFile() << InData->GetReaction(i)->GetData("DATABASE",STRING) << "\t" << InData->GetReaction(i)->GetData("PENALTY",STRING) << "\t" << ForwardPenalty << "\t" << BackwardPenalty << endl;
+		} else if (InData->GetReaction(i)->GetData("BIOMASS DRAIN REACTION",STRING).compare("") == 0) {
+			double ForwardPenalty = 0;
+			double BackwardPenalty = 0;
+			double ThermodynamicPenalty = atof(GetParameter("directionality penalty").data());
+			if (InData->GetReaction(i)->FEstDeltaG() != FLAG) {
+				ThermodynamicPenalty += fabs(InData->GetReaction(i)->FEstDeltaG())/10;
+			} else {
+				ThermodynamicPenalty += 1.5;
+			}
+			if (InData->GetReaction(i)->FType() == FORWARD) {
+				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
 				if (TempVariable != NULL) {
-					VariableCoefficients[TempVariable] = 1;
+					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
+					ForwardPenalty = ThermodynamicPenalty;
 				}
-				TempVariable = InData->GetReaction(i)->GetMFAVar(LARGE_DELTAG_ERROR_USE);
+			} else if (InData->GetReaction(i)->FType() == REVERSE) {
+				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
 				if (TempVariable != NULL) {
-					VariableCoefficients[TempVariable] = 10;
+					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
+					BackwardPenalty = ThermodynamicPenalty;
 				}
 			}
 		}
-		//Adding coefficients to force on inactive reaction
-		double inactiveCoefficient = atof(GetParameter("Reaction activation bonus").data());
-		if (inactiveCoefficient != 0) {
-			for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
-				if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
-					MFAVariable* currVar = mapIT->second->GetMFAVar(REACTION_USE);
-					if (currVar == NULL) {
-						currVar = mapIT->second->GetMFAVar(FORWARD_USE);
-					}
-					if (currVar != NULL) {
-						VariableCoefficients[currVar] = -inactiveCoefficient;
-					}
+		if (InParameters->ThermoConstraints && InParameters->ReactionErrorUseVariables) {
+			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(SMALL_DELTAG_ERROR_USE);
+			if (TempVariable != NULL) {
+				VariableCoefficients[TempVariable] = 1;
+			}
+			TempVariable = InData->GetReaction(i)->GetMFAVar(LARGE_DELTAG_ERROR_USE);
+			if (TempVariable != NULL) {
+				VariableCoefficients[TempVariable] = 10;
+			}
+		}
+	}
+	//Adding coefficients to force on inactive reaction
+	double inactiveCoefficient = atof(GetParameter("Reaction activation bonus").data());
+	if (inactiveCoefficient != 0) {
+		for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
+			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
+				MFAVariable* currVar = mapIT->second->GetMFAVar(REACTION_USE);
+				if (currVar == NULL) {
+					currVar = mapIT->second->GetMFAVar(FORWARD_USE);
 				}
-				if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
-					MFAVariable* currVar = mapIT->second->GetMFAVar(REVERSE_USE);
-					if (currVar != NULL) {
-						VariableCoefficients[currVar] = -inactiveCoefficient;
-					}
+				if (currVar != NULL) {
+					VariableCoefficients[currVar] = -inactiveCoefficient;
+				}
+			}
+			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
+				MFAVariable* currVar = mapIT->second->GetMFAVar(REVERSE_USE);
+				if (currVar != NULL) {
+					VariableCoefficients[currVar] = -inactiveCoefficient;
 				}
 			}
 		}
+	}
+	for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = FileCoefficients.begin(); mapIT != FileCoefficients.end(); mapIT++) {
+		VariableCoefficients[mapIT->first] = mapIT->second*VariableCoefficients[mapIT->first];
 	}
 	return SUCCESS;
 }	

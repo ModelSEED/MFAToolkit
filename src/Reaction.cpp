@@ -2834,7 +2834,7 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 	MFAVariable* NewVariable = NULL;
 	if (InParameters->MassBalanceConstraints) {
 		if (!FMark()) {
-			if ((Type == REVERSIBLE || InParameters->AllReversible) && GetData("NAME",STRING).compare("Biomass") != 0) {
+			if ((Type == REVERSIBLE || InParameters->AllReversible) && GetData("NAME",STRING).compare("Biomass") != 0 && GetData("FOREIGN",STRING).compare("BiomassRxn") != 0) {
 				NewVariable = InitializeMFAVariable();
 				NewVariable->Name = GetData("DATABASE",STRING);
 				NewVariable->AssociatedReaction = this;
