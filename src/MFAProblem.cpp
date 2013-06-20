@@ -6488,7 +6488,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 							currVar = currReaction->GetMFAVar(REACTION_USE);
 						}
 						if (currVar != NULL) {
-							VariableCoefficients[currVar] = atof((*strings)[2].data());
+							FileCoefficients[currVar] = atof((*strings)[2].data());
 						}
 					}
 				} else if ((*strings)[0].compare("reverse") == 0) {
@@ -6496,7 +6496,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 					if (currReaction != NULL) {
 						MFAVariable* currVar = currReaction->GetMFAVar(REVERSE_USE);
 						if (currVar != NULL) {
-							VariableCoefficients[currVar] = atof((*strings)[2].data());
+							FileCoefficients[currVar] = atof((*strings)[2].data());
 						}
 					}
 				}
