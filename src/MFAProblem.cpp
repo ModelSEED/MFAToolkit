@@ -6785,7 +6785,9 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 		}
 	}
 	for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = FileCoefficients.begin(); mapIT != FileCoefficients.end(); mapIT++) {
-		VariableCoefficients[mapIT->first] = mapIT->second*VariableCoefficients[mapIT->first];
+		if ( VariableCoefficients.find(mapIT->first) != VariableCoefficients.end() ) {
+			VariableCoefficients[mapIT->first] = mapIT->second * VariableCoefficients[mapIT->first];
+		}
 	}
 	return SUCCESS;
 }	
