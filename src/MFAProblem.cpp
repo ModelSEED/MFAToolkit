@@ -2973,7 +2973,8 @@ int MFAProblem::RecursiveMILP(Data* InData, OptimizationParameter*& InParameters
 		}
 
 		SetParameter("Current gap filling solutions",ProblemNote.data());	
-		PrintProblemReport(MinReactions,InParameters,ProblemNote);
+		PrintProblemReport(NewSolution->Objective,InParameters,ProblemNote);
+		//		PrintProblemReport(MinReactions,InParameters,ProblemNote);
 		ClearSolutions();
 
 		delete SolutionVarSumObj;	
@@ -3042,7 +3043,8 @@ int MFAProblem::RecursiveMILP(Data* InData, OptimizationParameter*& InParameters
 				}
 			}
 			ProblemNote.append(")");
-			PrintProblemReport(MinReactions,InParameters,ProblemNote);
+			PrintProblemReport(NewSolution->Objective, InParameters, ProblemNote);
+			//			PrintProblemReport(MinReactions,InParameters,ProblemNote);
 			ClearSolutions();
 		}
 	}
