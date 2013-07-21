@@ -6605,6 +6605,10 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 			}
 		}
 	}
+
+	//Separate database-related from thermo-related penalties. We only want probanno coefficients to affect the former.
+	map<MFAVariable*,double,std::less<MFAVariable*> > ThermoPenalties;
+	map<MFAVariable*,double,std::less<MFAVariable*> > DatabasePenalties;
 	for (int i=0; i < InData->FNumReactions(); i++) {
 		if (InData->GetReaction(i)->GetData("FOREIGN",STRING).compare("BiomassRxn") == 0) {
 			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
@@ -6710,22 +6714,28 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 			double ForwardPenalty = 0;
 			double BackwardPenalty = 0;
 			if (TempVariable != NULL) {
+			  DatabasePenalties[TempVariable] = Coefficient;
 				if (InData->GetReaction(i)->FType() == FORWARD || InData->GetReaction(i)->FType() == REVERSIBLE) {
 					ForwardPenalty = Coefficient;
 					VariableCoefficients[TempVariable] = Coefficient;
+					ThermoPenalties[TempVariable] = 0;
 				} else {
 					ForwardPenalty = Coefficient+ThermodynamicPenalty;
 					VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
+					ThermoPenalties[TempVariable] = ThermodynamicPenalty;
 				}
 			}
 			TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
 			if (TempVariable != NULL) {
+			  DatabasePenalties[TempVariable] = Coefficient;
 				if (InData->GetReaction(i)->FType() == FORWARD) {
 					BackwardPenalty = Coefficient+ThermodynamicPenalty;
 					VariableCoefficients[TempVariable] = Coefficient+ThermodynamicPenalty;
+					ThermoPenalties[TempVariable] = ThermodynamicPenalty;
 				} else {
 					BackwardPenalty = Coefficient;
 					VariableCoefficients[TempVariable] = Coefficient;
+					ThermoPenalties[TempVariable] = 0;
 				}
 			}
 			FLogFile() << InData->GetReaction(i)->GetData("DATABASE",STRING) << "\t" << InData->GetReaction(i)->GetData("PENALTY",STRING) << "\t" << ForwardPenalty << "\t" << BackwardPenalty << endl;
@@ -6743,12 +6753,16 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				if (TempVariable != NULL) {
 					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
 					ForwardPenalty = ThermodynamicPenalty;
+					ThermoPenalties[TempVariable] = ThermodynamicPenalty;
+					DatabasePenalties[TempVariable] = 0;
 				}
 			} else if (InData->GetReaction(i)->FType() == REVERSE) {
 				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
 				if (TempVariable != NULL) {
 					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
 					BackwardPenalty = ThermodynamicPenalty;
+					ThermoPenalties[TempVariable] = ThermodynamicPenalty;
+					DatabasePenalties[TempVariable] = 0;
 				}
 			}
 		}
@@ -6756,10 +6770,14 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(SMALL_DELTAG_ERROR_USE);
 			if (TempVariable != NULL) {
 				VariableCoefficients[TempVariable] = 1;
+				ThermoPenalties[TempVariable] = 1;
+				DatabasePenalties[TempVariable] = 0;
 			}
 			TempVariable = InData->GetReaction(i)->GetMFAVar(LARGE_DELTAG_ERROR_USE);
 			if (TempVariable != NULL) {
 				VariableCoefficients[TempVariable] = 10;
+				ThermoPenalties[TempVariable] = 10;
+				DatabasePenalties[TempVariable] = 0;
 			}
 		}
 	}
@@ -6786,7 +6804,9 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 	}
 	for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = FileCoefficients.begin(); mapIT != FileCoefficients.end(); mapIT++) {
 		if ( VariableCoefficients.find(mapIT->first) != VariableCoefficients.end() ) {
-			VariableCoefficients[mapIT->first] = mapIT->second * VariableCoefficients[mapIT->first];
+		  if ( DatabasePenalties.find(mapIT->first) != DatabasePenalties.end() && ThermoPenalties.find(mapIT->first) != ThermoPenalties.end() ) {
+			VariableCoefficients[mapIT->first] = mapIT->second * DatabasePenalties[mapIT->first] + ThermoPenalties[mapIT->first];
+		  }
 		}
 	}
 	return SUCCESS;
