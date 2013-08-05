@@ -19,7 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "MFAToolkit.h"
-#include "cplex.h"
+#include <cplex.h>
 
 CPXENVptr CPLEXenv;
 CPXLPptr CPLEXModel;
@@ -32,7 +32,6 @@ int InitializeCPLEXVariables() {
 
 int CPLEXInitialize() {
 	int Status = 0;
-	
 	//First I open the CPLEX environment if it is not already open
 	if (CPLEXenv == NULL) {
 		CPLEXenv = CPXopenCPLEX (&Status);

@@ -60,9 +60,11 @@ int SelectSolver(int ProbType, int CurrentSolver) {
 			return CPLEX;
 		} else {
 			if (ProbType == LP) {
-				return GLPK;
+				//return GLPK;
+				return CPLEX;
 			} else {
-				return SOLVER_SCIP;
+				return CPLEX;
+				//return SOLVER_SCIP;
 			}
 		}
 	}
