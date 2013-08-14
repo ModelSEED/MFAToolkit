@@ -6086,7 +6086,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			}
 			  
 			//Test status for OK flag
-			if(AddReaction && rxnobj->get("status").length() >= 2) {
+			if(AddReaction && rxnobj->get("status").length() >= 2 && GetParameter("Balanced reactions in gap filling only").compare("0") != 0) {
 			  string stat = rxnobj->get("status").substr(0,2);
 			  //RC, FO, SP, UN and RO statuses (Reversibility corrections and spontaneous reactions) are always accompanied by an "OK" status
 			  if(! (stat.compare("OK") == 0 || stat.compare("RC") == 0 || stat.compare("FO") == 0 || stat.compare("RO") == 0 || stat.compare("SP") == 0 || stat.compare("UN") == 0) ) {
