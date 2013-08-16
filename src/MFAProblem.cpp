@@ -6092,6 +6092,12 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			  if(! (stat.compare("OK") == 0 || stat.compare("RC") == 0 || stat.compare("FO") == 0 || stat.compare("RO") == 0 || stat.compare("SP") == 0 || stat.compare("UN") == 0) ) {
 			    cout << "Status for reaction " << RxnId << " not OK: " << rxnobj->get("status") << endl;
 			    AddReaction = false;
+			    for (int j=0; j < int(AllowedUnbalancedReactions->size()); j++) {
+					if (RxnId.compare((*AllowedUnbalancedReactions)[j]) == 0) {
+						AddReaction = true;
+						break;
+					}
+				}
 			  }
 			}
 
