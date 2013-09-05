@@ -6084,7 +6084,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			if (AddReaction && InData->FindReaction("DATABASE",RxnId.data()) != NULL) {
 				AddReaction = false;
 			}
-			  
+
 			//Test status for OK flag
 			if(AddReaction && rxnobj->get("status").length() >= 2 && GetParameter("Balanced reactions in gap filling only").compare("0") != 0) {
 			  string stat = rxnobj->get("status").substr(0,2);
@@ -6094,7 +6094,6 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 			    AddReaction = false;
 			    for (int j=0; j < int(AllowedUnbalancedReactions->size()); j++) {
 					if (RxnId.compare((*AllowedUnbalancedReactions)[j]) == 0) {
-						cout << "Reaction " << RxnId << " allowed!" << endl;
 						AddReaction = true;
 						break;
 					}
@@ -6129,7 +6128,6 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 					} else {
 						for (int j=0; j < int(AllowedUnbalancedReactions->size()); j++) {
 							if (NewReaction->GetData("DATABASE",STRING).compare((*AllowedUnbalancedReactions)[j]) == 0) {
-								cout << "Reaction " << NewReaction->GetData("DATABASE",STRING) << " allowed again!" << endl;
 								NewReaction->AddData("FOREIGN","Reaction",STRING);
 								NewReaction->SetType(NewReaction->CalculateDirectionalityFromThermo());
 								InData->AddReaction(NewReaction);
