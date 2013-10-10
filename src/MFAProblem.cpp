@@ -3376,11 +3376,11 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	SavedBounds* currentBounds = this->saveBounds();
 	bool originalSense = this->FMax();
 	LinEquation* originalObjective = this->GetObjective();
-	//ObjFunct = NULL;
 	map<string,bool> inactiveReactions;
 	map<string,bool> compoundsToAssess;
 	SetParameter("tight bounds search variables","FLUX;FORWARD_FLUX;REVERSE_FLUX;DRAIN_FLUX;FORWARD_DRAIN_FLUX;REVERSE_DRAIN_FLUX");
 	if (GetParameter("find tight bounds").compare("1") == 0) {
+		ObjFunct = NULL;
 		this->FindTightBounds(InData,InParameters,false,true);
 		for (int i=0; i < FNumVariables(); i++) {
 			if ((GetVariable(i)->AssociatedReaction != NULL && GetVariable(i)->Type == FLUX) || (GetVariable(i)->AssociatedSpecies != NULL && GetVariable(i)->Type == DRAIN_FLUX && GetVariable(i)->Compartment == GetCompartment("c")->Index)) {
@@ -3396,6 +3396,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 				}
 			}
 		}
+		this->AddObjective(originalObjective);
 		//objectiveConstraint->RightHandSide = -10000;
 		//this->LoadConstToSolver(objectiveConstraint->Index);
 	}
@@ -3550,6 +3551,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 							string note;
 							CheckIndividualMetaboliteProduction(InData,InParameters,GetParameter("metabolites to optimize"),false,false,note,true);
 							noGrowth = GetParameter("No growth metabolites");
+							this->LoadSolver();
 						} else if (NewSolution->Objective > 1e-7) {
 							if (GetParameter("Combinatorial deletions").compare("none") != 0) {
 								if (CombinatorialKO(1,InData,false)) {
@@ -3585,7 +3587,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 													databaseID = "";
 												}
 											}
-											if (databaseID.length() > 0 && inactiveReactions.count(databaseID) == 0) {
+											if (databaseID.length() > 0 && inactiveReactions.count(databaseID) == 0 && databaseID.compare(InParameters->labels[i]) != 0) {
 												if (GetVariable(j)->AssociatedReaction != NULL && koReactions.count(databaseID) == 0) {
 													nonContributing = false;
 												}
@@ -3598,10 +3600,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 									}
 								}
 								if (nonContributing && GetParameter("delete noncontributing reactions").compare("1") == 0) {
-									if (newInactiveReactions.length() > 0) {
-										newInactiveReactions.append(";");
-									}
-									newInactiveReactions.append("DELETED");
+									newInactiveReactions.assign("DELETED");
 								}
 								objectiveConstraint->RightHandSide = -10000;
 								this->LoadConstToSolver(objectiveConstraint->Index);
@@ -3643,6 +3642,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		outputVector.push_back(newLine);
 		if (newInactiveReactions.compare("DELETED") == 0) {
 			for (int j=0; j < int(KOReactions.size()); j++) {
+				inactiveReactions[KOReactions[j]->GetData("DATABASE",STRING)] = true;
 				MFAVariable* newVar = KOReactions[j]->GetMFAVar(FLUX);
 				currentBounds->lowerBounds[newVar->Index] = 0;
 				currentBounds->upperBounds[newVar->Index] = 0;
