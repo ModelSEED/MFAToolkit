@@ -6441,6 +6441,18 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 										currentGapfilling.append(";");
 									}
 									currentGapfilling.append((*SolutionReactions)[j]);
+									// Zero out the objective coefficient for reactions added by gapfilling
+									// There might be a more efficient way to get this index... but I want to make sure I'm zeroing out the right reaction
+									// and the index for OldObjective is not the same as the index for SolutionReactions.
+									//
+									// Note - this probably wil break things if we are trying to get muleiple solutions to multiple inactive reactions.
+									for ( int n=0; n < oldObjective->Variables.size(); n++ ) {
+									  if ( oldObjective->Variables[n]->AssociatedReaction->GetData("DATABASE", STRING).compare((*SolutionReactions)[j]) == 0 ) {
+									    oldObjective->Coefficient[n] = 0;
+									    break;
+									  }
+									}
+									
 									//TODO: Handle activated reactions
 									//activated.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
 									//activatedReactions[oldObjective->Variables[j]->AssociatedReaction] = true;
@@ -6451,8 +6463,14 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 						}
 					}
 					delete SolutionArray;
+					// zero out objective coefficients for the repaired reaction (mirroring what's done above if we mark a reaction as repared)
+					for(int m=0; m < int(InactiveObjectiveIndecies[i].size()); m++) {
+					  oldObjective->Coefficient[InactiveObjectiveIndecies[i][m]] = 0;
+					}
 					Repaired[i] = count;
 				} else {
+				  // Prevent repeatedly doing FBA after a failed gapfill.
+				  Repaired[i] = -2;
 					gapfilled = "FAILED";
 					activated = "NONE";
 				}
