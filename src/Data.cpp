@@ -835,6 +835,9 @@ Species* Data::FindSpecies(const char* DatabaseName,const char* DataID) {
 Reaction* Data::FindReaction(const char* DatabaseName,const char* DataID) {
 	string StrDataID(DataID);
 	string StrDBName(DatabaseName);
+	if (StrDataID.substr(0,1).compare("+") == 0 || StrDataID.substr(0,1).compare("-") == 0) {
+		StrDataID = StrDataID.substr(1);
+	}
 	vector<string>* Strings = StringToStrings(StrDBName,";");
 	for (int i=0; i < int(Strings->size()); i++) {
 		Reaction* Temp = RxnDatabaseLinks[(*Strings)[i]][StrDataID];

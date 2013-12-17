@@ -3217,8 +3217,12 @@ void Reaction::ClearMFAVariables(bool DeleteThem) {
 void Reaction::ResetFluxBounds(double Min,double Max,MFAProblem* InProblem) {
 	MFAVariable* CurrentVariable = GetMFAVar(FLUX);
 	if (CurrentVariable != NULL) {
-		CurrentVariable->LowerBound = Min;
-		CurrentVariable->UpperBound = Max;
+		if (Min != FLAG) {
+			CurrentVariable->LowerBound = Min;
+		}
+		if (Max != FLAG) {
+			CurrentVariable->UpperBound = Max;
+		}
 		if (InProblem != NULL && InProblem->FProblemLoaded()) {
 			InProblem->LoadVariable(CurrentVariable->Index);
 		}
@@ -3227,15 +3231,19 @@ void Reaction::ResetFluxBounds(double Min,double Max,MFAProblem* InProblem) {
 
 	CurrentVariable = GetMFAVar(FORWARD_FLUX);
 	if (CurrentVariable != NULL) {
-		if (Max >= 0) {
-			CurrentVariable->UpperBound = Max;
-		} else {
-			CurrentVariable->UpperBound = 0;
+		if (Max != FLAG) {
+			if (Max >= 0) {
+				CurrentVariable->UpperBound = Max;
+			} else {
+				CurrentVariable->UpperBound = 0;
+			}
 		}
-		if (Min >= 0) {
-			CurrentVariable->LowerBound = Min;	
-		} else {
-			CurrentVariable->LowerBound = 0;	
+		if (Min != FLAG) {
+			if (Min >= 0) {
+				CurrentVariable->LowerBound = Min;
+			} else {
+				CurrentVariable->LowerBound = 0;
+			}
 		}
 		if (InProblem != NULL && InProblem->FProblemLoaded()) {
 			InProblem->LoadVariable(CurrentVariable->Index);
@@ -3244,15 +3252,19 @@ void Reaction::ResetFluxBounds(double Min,double Max,MFAProblem* InProblem) {
 
 	CurrentVariable = GetMFAVar(REVERSE_FLUX);
 	if (CurrentVariable != NULL) {
-		if (Max <= 0) {
-			CurrentVariable->LowerBound = Max;
-		} else {
-			CurrentVariable->LowerBound = 0;
+		if (Max != FLAG) {
+			if (Max <= 0) {
+				CurrentVariable->LowerBound = Max;
+			} else {
+				CurrentVariable->LowerBound = 0;
+			}
 		}
-		if (Min <= 0) {
-			CurrentVariable->UpperBound = -Min;	
-		} else {
-			CurrentVariable->UpperBound = 0;	
+		if (Min != FLAG) {
+			if (Min <= 0) {
+				CurrentVariable->UpperBound = -Min;
+			} else {
+				CurrentVariable->UpperBound = 0;
+			}
 		}
 		if (InProblem != NULL && InProblem->FProblemLoaded()) {
 			InProblem->LoadVariable(CurrentVariable->Index);
