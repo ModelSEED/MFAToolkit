@@ -1417,9 +1417,9 @@ OptimizationParameter* ReadParameters() {
 						newSet.push_back((*stringsThree)[j]);
 					}
 					NewParameters->KOSets.push_back(newSet);
-					delete stringsTwo;
 					delete stringsThree;
 				}
+				delete stringsTwo;
 			}
 		}
 		delete strings;
