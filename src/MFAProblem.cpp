@@ -3681,7 +3681,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		if (GetParameter("delete noncontributing reactions").compare("1") == 0 && rerun == 1 && i == int(InParameters->labels.size()-1)) {
 			outputVector.clear();
 			SetParameter("delete noncontributing reactions","0");
-			i = 0;
+			i = -1;
 			rerun = 0;
 		}
 	}
