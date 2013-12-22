@@ -3139,7 +3139,6 @@ int MFAProblem::CheckIndividualMetaboliteProduction(Data* InData, OptimizationPa
 	
 	bool First = true;
 	int Status = SUCCESS;
-
 	//If the problem is not already built, I build the problem
 	if (FNumVariables() == 0) {
 		if (BuildMFAProblem(InData,InParameters) != SUCCESS) {
@@ -3150,7 +3149,6 @@ int MFAProblem::CheckIndividualMetaboliteProduction(Data* InData, OptimizationPa
 			return FAIL;	
 		}
 	}
-	
 	//I clear the previous objective and create the new objective
 	ClearObjective(false);
 	ObjFunct = InitializeLinEquation();
@@ -3330,6 +3328,7 @@ int MFAProblem::CheckIndividualMetaboliteProduction(Data* InData, OptimizationPa
 				OriginalMax = NewReaction->FluxUpperBound();
 				NewReaction->ResetFluxBounds(0,100,this);
 				ResetSolver();
+
 				for (int i=0; i < NewReaction->FNumReactants(REACTANT); i++) {
 					Targets.push_back(NewReaction->GetReactant(i));
 					Compartments.push_back(NewReaction->GetReactantCompartment(i));
