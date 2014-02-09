@@ -3048,7 +3048,6 @@ int MFAProblem::RecursiveMILP(Data* InData, OptimizationParameter*& InParameters
 			ClearSolutions();
 		}
 	}
-	
 	//Restoring problem state
 	LoadState(ProblemStateIndex,true,true,true,PrintSolutions,true);
 	ClearState(ProblemStateIndex);
@@ -3057,7 +3056,6 @@ int MFAProblem::RecursiveMILP(Data* InData, OptimizationParameter*& InParameters
 
 	//Clearing the clock for this recursive MILP
 	ClearClock(ClockIndex);
-
 	return TotalSolutions;
 }
 
@@ -6469,7 +6467,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 						if ((*SolutionArray)[k].length() > 0) {
 							vector<string>* SolutionDataArray = StringToStrings((*SolutionArray)[k],":");
 							double Cost = atof((*SolutionDataArray)[0].data());
-							if (Cost > MFA_ZERO_TOLERANCE) {
+							if (Cost > MFA_ZERO_TOLERANCE && SolutionDataArray->size() > 1 && (*SolutionDataArray)[1].length() > 0) {
 								if (gapfilled.length() > 0) {
 									gapfilled.append("|");
 								}
@@ -6493,7 +6491,6 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 									    break;
 									  }
 									}
-									
 									//TODO: Handle activated reactions
 									//activated.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
 									//activatedReactions[oldObjective->Variables[j]->AssociatedReaction] = true;
@@ -6532,7 +6529,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			if (firstSolution && GetParameter("Solve complete gapfilling only once").compare("1") == 0) {
 				i = int(InactiveReactions.size());
 			}
-		}		
+		}
 	}
 	ofstream outputTwo;
 	if (OpenOutput(outputTwo,(FOutputFilepath()+"GapfillingComplete.txt").data())) {

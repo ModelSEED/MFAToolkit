@@ -2355,6 +2355,9 @@ OptSolutionData* ParseSCIPSolution(string Filename,vector<MFAVariable*> Variable
 			if (Strings->size() >= 9 && (*Strings)[0].compare("SCIP") == 0 && (*Strings)[1].compare("Status") == 0) {
 				if (((*Strings)[2]+(*Strings)[3]+(*Strings)[4]+(*Strings)[5]+(*Strings)[6]+(*Strings)[7]+(*Strings)[8]).compare(":problemissolved[optimalsolutionfound]") == 0) {
 					NewSolution->Status = SUCCESS;
+				} else if (((*Strings)[2]+(*Strings)[3]+(*Strings)[4]+(*Strings)[5]+(*Strings)[6]+(*Strings)[7]+(*Strings)[8]).compare(":problemissolved[infeasible]") == 0) {
+					NewSolution->Status = INFEASIBLE;
+					return NewSolution;
 				} else if (((*Strings)[2]+(*Strings)[3]+(*Strings)[4]+(*Strings)[5]+(*Strings)[6]+(*Strings)[7]+(*Strings)[8]).compare(":solvingwasinterrupted[timelimitreached]") == 0) {
 					NewSolution->Status = SUCCESS;
 					ofstream suboptOut;
