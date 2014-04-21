@@ -6135,7 +6135,6 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 
 			if(AddReaction){
 				Reaction* NewReaction = new Reaction(RxnId,InData);
-				
 				//Checking that only approved compartments are involved in the reaction
 				bool ContainsDissapprovedCompartments = false;
 				if (DissapprovedCompartments != NULL) {
@@ -6150,9 +6149,9 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 				
 				if (!ContainsDissapprovedCompartments) {
 					//Checking if the reaction is balanced
-					if (!NewReaction->BalanceReaction(false,false)) {
-						NewReaction->AddData("UNBALANCED","YES",STRING);
-					}
+					//if (!NewReaction->BalanceReaction(false,false)) {
+					//	NewReaction->AddData("UNBALANCED","YES",STRING);
+					//}
 					if (GetParameter("Balanced reactions in gap filling only").compare("0") == 0 || NewReaction->GetData("UNBALANCED",STRING).length() == 0) {
 						NewReaction->AddData("FOREIGN","Reaction",STRING);
 						NewReaction->SetType(NewReaction->CalculateDirectionalityFromThermo());
