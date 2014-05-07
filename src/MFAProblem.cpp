@@ -6413,6 +6413,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 						} else {
 							this->LoadObjective();
 						}
+						PrintVariableKey();
 						OptSolutionData* solution = RunSolver(false,false,false);
 						if (solution->Status == SUCCESS && solution->Objective > MFA_ZERO_TOLERANCE) {
 							if (count == 0) {
