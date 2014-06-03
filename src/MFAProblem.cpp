@@ -760,7 +760,7 @@ int MFAProblem::BuildMFAProblem(Data* InData,OptimizationParameter*& InParameter
 	//Adding variables and constraints associated with genes and complexes (COMPLEX_USE and GENE_USE)
 	if (InParameters->GeneConstraints) {
 		//Complex variables were already created and added by the reactions
-		//Now creating the reaction-gene dependancy constraints
+		//Now creating the reaction-gene dependency constraints
 		for (int i=0; i < InData->FNumReactions(); i++) {
 			//Multiple constraints are created for each reaction: a constraint linking flux to genes and complexes, and a constraint linking genes to each complex
 			vector<LinEquation*> GeneReactionConstraints = InData->GetReaction(i)->CreateGeneReactionConstraints();
@@ -772,6 +772,35 @@ int MFAProblem::BuildMFAProblem(Data* InData,OptimizationParameter*& InParameter
 				}
 				AddConstraint(GeneReactionConstraints[j]);
 			}
+		}
+
+		//Now creating new gene-reaction dependency constraints
+		// <If gene is used, then at least one reaction associated with it is used.>
+		for (int i=0; i < InData->FNumGenes(); i++) {			
+			LinEquation* NewUpperConstraint = InitializeLinEquation("Gene-reaction mapping of new upper constraint",0,LESS);
+			NewUpperConstraint->Variables.push_back(InData->GetGene(i)->GetMFAVar());
+			NewUpperConstraint->Coefficient.push_back(1);
+			
+			for (int j=0; j < InData->GetGene(i)->FNumReactions(); j++ ) {
+				Reaction* rxn = InData->GetGene(i)->GetReaction(j);
+				MFAVariable* ReactionUseVariable = rxn->GetMFAVar(REACTION_USE);
+				if (ReactionUseVariable != NULL) {
+					NewUpperConstraint->Variables.push_back(ReactionUseVariable);
+					NewUpperConstraint->Coefficient.push_back(-1);
+				} else {
+					ReactionUseVariable = rxn->GetMFAVar(FORWARD_USE);
+					if (ReactionUseVariable != NULL) {
+						NewUpperConstraint->Variables.push_back(ReactionUseVariable);
+						NewUpperConstraint->Coefficient.push_back(-1);
+					}
+					ReactionUseVariable = rxn->GetMFAVar(REVERSE_USE);
+					if (ReactionUseVariable != NULL) {
+						NewUpperConstraint->Variables.push_back(ReactionUseVariable);
+						NewUpperConstraint->Coefficient.push_back(-1);
+					}		      
+				}		    
+			}
+			AddConstraint(NewUpperConstraint);
 		}
 	}
 
@@ -8312,14 +8341,15 @@ int MFAProblem::SoftConstraint(Data* InData) {
 		}
 	}		
 
-	Kappa = -1 * Kappa; // because objective is max.
+	if (FMax()) {
+	  Kappa = -1 * Kappa; // because objective is max.
+	}
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());
 	NewObjective->Variables.push_back(alpha);
 	NewObjective->Variables.push_back(beta);
 	NewObjective->Coefficient.push_back(Kappa);
 	NewObjective->Coefficient.push_back(Kappa);
 	AddObjective(NewObjective);
-	SetMax();
 	LoadObjective();	
 	//Optimizing objective
 	OptSolutionData* Solution = RunSolver(true,true,true);
@@ -8338,6 +8368,133 @@ int MFAProblem::SoftConstraint(Data* InData) {
 		Output << NewObjective->Variables[2]->Name <<"\t" <<NewObjective->Variables[2]->Value << endl; //print beta
 		Output << "objectFraction\t" << objectFraction;
 		Output.close();
+	}
+	return SUCCESS;
+}
+
+/*FitFitGeneActivtyState
+Author: Shinnosuke Kondo, Hope College, 5/14/2014.
+Description: TODO*/
+int MFAProblem::FitGeneActivtyState(Data* InData) {
+	//Read in optimization parameters
+	OptimizationParameter* Parameters = ReadParameters();
+	//Adjusting settings for study
+	Parameters->DecomposeReversible = true;
+	Parameters->ReactionsUse = true;
+	Parameters->AllReactionsUse = true;
+	Parameters->GeneConstraints = true;
+
+	//Building problem
+	if (BuildMFAProblem(InData, Parameters) != SUCCESS) {
+		cerr << "Could not build gene activity state problem!" << endl;
+		return FAIL;
+	}
+	//Checking that model grows (And set up variables for later use.)
+	string Note;
+	double ObjectiveValue = 0;
+	if (OptimizeSingleObjective(InData, Parameters, GetParameter("objective"),
+			false, false, ObjectiveValue, Note) != SUCCESS) {
+		cerr << "Could not run gene activity state assertion problem!" << endl;
+		return FAIL;
+	}
+	if (ObjectiveValue == 0) {
+		cerr << "Model did not grow before analysis!" << endl;
+		return FAIL;
+	}
+
+//	debug shin
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->Type == FORWARD_USE ||GetVariable(i)->Type == REVERSE_USE || GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX) {
+			cerr << GetVariable(i)->Name <<": " << GetVariable(i)->Value << endl;	
+		}
+	}
+
+
+	cerr << "Model did grow before analysis!" << endl;
+	// Now it loads a penalty coefficient for each gene.
+	vector<string>* GeneCoef = StringToStrings(GetParameter("Gene Activity State"),";");
+	if (GeneCoef->size() <= 1) {
+		cerr << "No gene activity state information!" << endl;
+		return FAIL;
+	}
+	double Kappa = atof((*GeneCoef)[0].data());
+
+	map<string,double> CoeffMap;
+	map<string,string> CaseMap;
+	for (int i=1; i < int(GeneCoef->size()); i++) {
+		vector<string>* CoefTrio = StringToStrings((*GeneCoef)[i],":");
+		Gene* CurrentGene = InData->FindGene("NAME;DATABASE;ENTRY",(*CoefTrio)[0].data());
+		if (CurrentGene != NULL) {
+			CoeffMap[(*CoefTrio)[0]] = atof((*CoefTrio)[1].data());
+			CaseMap[(*CoefTrio)[0]] = (*CoefTrio)[2];
+		}
+		delete CoefTrio;
+	}
+
+	// Change the coefficient for penalties so that both range is between 0 and 1 without Kappa.
+	Kappa = ObjectiveValue * Kappa / 0.5 / CoeffMap.size();
+	if (FMax()) {
+	  Kappa = -1* Kappa; // Because the new objective should be minimized.
+	}
+
+	LinEquation* NewObjective = CloneLinEquation(GetObjective());
+	for (int i=0; i < FNumVariables(); i++) {
+	  if (GetVariable(i)->Type == GENE_USE) {
+	    if (CoeffMap.count(GetVariable(i)->Name) > 0 && CaseMap[GetVariable(i)->Name] != "2" ) {
+	      if(CaseMap[GetVariable(i)->Name] == "1") {
+		//penalized if a gene is active
+		NewObjective->Variables.push_back(GetVariable(i));
+		NewObjective->Coefficient.push_back(Kappa);		      
+	      } else if (CaseMap[GetVariable(i)->Name] == "3") {
+		//penalized if a gene is inactive
+		// Need to "not" Gene_Use vatiable.
+		MFAVariable* GeneUnuseVariable = InitializeMFAVariable();
+		GeneUnuseVariable->Name = ("Not_" + GetVariable(i)->Name);
+		GeneUnuseVariable->UpperBound = 1;
+		GeneUnuseVariable->LowerBound = 0;
+		GeneUnuseVariable->Binary = true;
+		GeneUnuseVariable->Type = INTERVAL_USE;
+		LoadVariable(AddVariable(GeneUnuseVariable));		      		      
+		
+		LinEquation* NewConstraint = InitializeLinEquation();
+		NewConstraint->RightHandSide = 0;
+		NewConstraint->EqualityType =EQUAL;
+		NewConstraint->ConstraintType = LINEAR;
+		NewConstraint->ConstraintMeaning.assign("Make one variable NOT of the other");
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Variables.push_back(GetVariable(i));
+		NewConstraint->Variables.push_back(GeneUnuseVariable);		      
+		LoadConstToSolver(AddConstraint(NewConstraint));		      
+		
+		NewObjective->Variables.push_back(GeneUnuseVariable);
+		NewObjective->Coefficient.push_back(Kappa);		      
+	      } else {
+		// Unknown case
+		cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
+	      }
+	    }
+	  }
+	}
+	AddObjective(NewObjective);
+	LoadObjective();
+	//Optimizing objective
+	OptSolutionData* Solution = RunSolver(true,true,true);
+	if (Solution == NULL) {
+		cerr << "No solution found!" << endl;
+		return FAIL;
+	}
+
+	PrintProblemReport(Solution->Objective,Parameters,Note);
+	delete GeneCoef;
+
+	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
+	cerr << "It worked! New objective value is " << NewObjective->Variables[0]->Value << endl;
+	ofstream Output;
+	if (OpenOutput(Output,FOutputFilepath()+"GeneActivityStateFBAResult.txt")) {
+	  //	  Output << NewObjective->Variables[2]->Name <<"\t" <<NewObjective->Variables[2]->Value << endl; //print beta
+	  Output << "objectFraction\t" << objectFraction;
+	  Output.close();
 	}
 	return SUCCESS;
 }
