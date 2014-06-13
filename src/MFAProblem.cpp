@@ -8402,21 +8402,13 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		return FAIL;
 	}
 
-//	debug shin
-	for (int i=0; i < FNumVariables(); i++) {
-		if (GetVariable(i)->Type == FORWARD_USE ||GetVariable(i)->Type == REVERSE_USE || GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX) {
-			cerr << GetVariable(i)->Name <<": " << GetVariable(i)->Value << endl;	
-		}
-	}
-
-
-	cerr << "Model did grow before analysis!" << endl;
 	// Now it loads a penalty coefficient for each gene.
 	vector<string>* GeneCoef = StringToStrings(GetParameter("Gene Activity State"),";");
 	if (GeneCoef->size() <= 1) {
 		cerr << "No gene activity state information!" << endl;
 		return FAIL;
 	}
+	// kappa represents a weighting of the penalty function; Shin will update this
 	double Kappa = atof((*GeneCoef)[0].data());
 
 	map<string,double> CoeffMap;
@@ -8437,14 +8429,14 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	  Kappa = -1* Kappa; // Because the new objective should be minimized.
 	}
 
-	LinEquation* NewObjective = CloneLinEquation(GetObjective());
+	LinEquation* NewObjective = CloneLinEquation(GetObjective());	
 	for (int i=0; i < FNumVariables(); i++) {
 	  if (GetVariable(i)->Type == GENE_USE) {
 	    if (CoeffMap.count(GetVariable(i)->Name) > 0 && CaseMap[GetVariable(i)->Name] != "2" ) {
 	      if(CaseMap[GetVariable(i)->Name] == "1") {
 		//penalized if a gene is active
 		NewObjective->Variables.push_back(GetVariable(i));
-		NewObjective->Coefficient.push_back(Kappa);		      
+		NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
 	      } else if (CaseMap[GetVariable(i)->Name] == "3") {
 		//penalized if a gene is inactive
 		// Need to "not" Gene_Use vatiable.
@@ -8457,18 +8449,18 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		LoadVariable(AddVariable(GeneUnuseVariable));		      		      
 		
 		LinEquation* NewConstraint = InitializeLinEquation();
-		NewConstraint->RightHandSide = 0;
+		NewConstraint->RightHandSide = 1;
 		NewConstraint->EqualityType =EQUAL;
 		NewConstraint->ConstraintType = LINEAR;
 		NewConstraint->ConstraintMeaning.assign("Make one variable NOT of the other");
 		NewConstraint->Coefficient.push_back(1);
-		NewConstraint->Coefficient.push_back(1);
 		NewConstraint->Variables.push_back(GetVariable(i));
+		NewConstraint->Coefficient.push_back(1);
 		NewConstraint->Variables.push_back(GeneUnuseVariable);		      
 		LoadConstToSolver(AddConstraint(NewConstraint));		      
 		
 		NewObjective->Variables.push_back(GeneUnuseVariable);
-		NewObjective->Coefficient.push_back(Kappa);		      
+		NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
 	      } else {
 		// Unknown case
 		cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
@@ -8492,8 +8484,13 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	cerr << "It worked! New objective value is " << NewObjective->Variables[0]->Value << endl;
 	ofstream Output;
 	if (OpenOutput(Output,FOutputFilepath()+"GeneActivityStateFBAResult.txt")) {
-	  //	  Output << NewObjective->Variables[2]->Name <<"\t" <<NewObjective->Variables[2]->Value << endl; //print beta
-	  Output << "objectFraction\t" << objectFraction;
+		Output << "Original FBA Result was " << "\t" << ObjectiveValue << endl;
+		double so = Solution->Objective;
+		Output << "New objective is " << so << endl;
+		Output << endl << "feature_name\tconflict" << endl;
+		for (int i=0; i < NewObjective->Variables.size(); i++) {
+			Output << NewObjective->Variables[i]->Name << "\t" << NewObjective->Variables[i]->Value << endl;
+		}
 	  Output.close();
 	}
 	return SUCCESS;
