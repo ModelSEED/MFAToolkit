@@ -1060,6 +1060,10 @@ int ConvertVariableType(string TypeName) {
 		return LARGE_DELTAG_ERROR_USE;
 	} else if (TypeName.compare("LUMP_USE") == 0) {
 		return LUMP_USE;
+	} else if (TypeName.compare("GENE_UNUSE") == 0) {
+		return GENE_UNUSE;
+	} else if (TypeName.compare("REACTION_CONSTRAINT") == 0) {
+		return REACTION_CONSTRAINT;
 	}
 
 	FErrorFile() << "Unrecognized MFA variable type: " << TypeName << endl;
@@ -1131,6 +1135,10 @@ string ConvertVariableType(int Type) {
 		TypeName.assign("LARGE_DELTAG_ERROR_USE");
 	} else if (Type == LUMP_USE) {
 		TypeName.assign("LUMP_USE");
+	} else if (Type == GENE_UNUSE) {
+		TypeName.assign("GENE_UNUSE");	
+	} else if (Type == REACTION_CONSTRAINT) {
+		TypeName.assign("REACTION_CONSTRAINT");	
 	} else {
 		FErrorFile() << "Unrecognized MFA variable type number: " << Type << endl;
 		FlushErrorFile();
@@ -2206,6 +2214,10 @@ string GetMFAVariableName(MFAVariable* InVariable) {
 		TypeName.assign("LDGEU");
 	} else if (InType == LUMP_USE) {
 		TypeName.assign("LU");
+	} else if (InType == GENE_UNUSE) {
+		TypeName.assign("GUU");	
+	} else if (InType == REACTION_CONSTRAINT) {
+		TypeName.assign("RC");			
 	} else {
 		FErrorFile() << "Unrecognized MFA variable type number: " << InType << endl;
 		FlushErrorFile();

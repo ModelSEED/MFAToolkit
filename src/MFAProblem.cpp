@@ -8280,13 +8280,13 @@ int MFAProblem::SoftConstraint(Data* InData) {
 
 	MFAVariable* alpha = InitializeMFAVariable();
 	alpha->Name = (alpha->Name + "alpha");
-	alpha->Type = INTERVAL_USE; // what type it should be?
+	alpha->Type = REACTION_CONSTRAINT;
 	alpha->LowerBound = 0;
 	LoadVariable(AddVariable(alpha));
 
 	MFAVariable* beta = InitializeMFAVariable();
 	beta->Name = (beta->Name + "beta");
-	beta->Type = INTERVAL_USE; // what type it should be?
+	beta->Type = REACTION_CONSTRAINT;
 	beta->LowerBound = 0;
 	LoadVariable(AddVariable(beta));
 
@@ -8445,7 +8445,7 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		GeneUnuseVariable->UpperBound = 1;
 		GeneUnuseVariable->LowerBound = 0;
 		GeneUnuseVariable->Binary = true;
-		GeneUnuseVariable->Type = INTERVAL_USE;
+		GeneUnuseVariable->Type = GENE_UNUSE;
 		LoadVariable(AddVariable(GeneUnuseVariable));		      		      
 		
 		LinEquation* NewConstraint = InitializeLinEquation();
@@ -8477,7 +8477,8 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		return FAIL;
 	}
 
-	PrintProblemReport(Solution->Objective,Parameters,Note);
+	double newobjectivevalue = Solution->Objective;
+	PrintProblemReport(newobjectivevalue,Parameters,Note);
 	delete GeneCoef;
 
 	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
@@ -8485,8 +8486,7 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	if (OpenOutput(Output,FOutputFilepath()+"GeneActivityStateFBAResult.txt")) {
 		Output << "Name\tValue" << endl;
 		Output << "originalObjective\t" << ObjectiveValue << endl;
-		double so = Solution->Objective;
-		Output << "objective\t" << so << endl;
+		Output << "objective\t" << newobjectivevalue << endl;
 		Output << "originalGrowth\t" << originalGrowth << endl;
 		Output << "growth\t" << NewObjective->Variables[0]->Value << endl;
 		for (int i=1; i < NewObjective->Variables.size(); i++) {
