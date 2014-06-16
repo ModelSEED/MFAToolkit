@@ -8428,7 +8428,7 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	if (FMax()) {
 	  Kappa = -1* Kappa; // Because the new objective should be minimized.
 	}
-
+	double originalGrowth = GetObjective()->Variables[0]->Value;
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());	
 	for (int i=0; i < FNumVariables(); i++) {
 	  if (GetVariable(i)->Type == GENE_USE) {
@@ -8481,14 +8481,15 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	delete GeneCoef;
 
 	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
-	cerr << "It worked! New objective value is " << NewObjective->Variables[0]->Value << endl;
 	ofstream Output;
 	if (OpenOutput(Output,FOutputFilepath()+"GeneActivityStateFBAResult.txt")) {
-		Output << "Original FBA Result was " << "\t" << ObjectiveValue << endl;
+		Output << "Name\tValue" << endl;
+		Output << "originalObjective\t" << ObjectiveValue << endl;
 		double so = Solution->Objective;
-		Output << "New objective is " << so << endl;
-		Output << endl << "feature_name\tconflict" << endl;
-		for (int i=0; i < NewObjective->Variables.size(); i++) {
+		Output << "objective\t" << so << endl;
+		Output << "originalGrowth\t" << originalGrowth << endl;
+		Output << "growth\t" << NewObjective->Variables[0]->Value << endl;
+		for (int i=1; i < NewObjective->Variables.size(); i++) {
 			Output << NewObjective->Variables[i]->Name << "\t" << NewObjective->Variables[i]->Value << endl;
 		}
 	  Output.close();
