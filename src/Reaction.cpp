@@ -557,7 +557,7 @@ int Reaction::ParseGeneString(string InGeneString) {
 			}
 
 			bool newGene = true;
-			//Adding gene to the logic node
+			//Adding gene to the logic node if there isn't duplication.
 			for (int i = 0; i < Node->Genes.size();i++) {
 			  if (Node->Genes[i] == Temp) {
 			    newGene = false;
@@ -601,7 +601,16 @@ int Reaction::ParseGeneString(string InGeneString) {
 						if ((Temp->Genes.size()+Temp->LogicNodes.size()) == 1 || Temp->Logic ==  LogicNodes[i]->Logic) {
 							Change = true;
 							for (int k=0; k < int(Temp->Genes.size()); k++) {
-								LogicNodes[i]->Genes.push_back(Temp->Genes[k]);
+								bool newGene = true;
+								//Adding gene to the parent logic node if there isn't duplication.
+								for (int l = 0; l < LogicNodes[i]->Genes.size();l++) {
+									if (LogicNodes[i]->Genes[l] == Temp->Genes[k]) {
+										newGene = false;
+									} 
+								}
+								if (newGene) {
+									LogicNodes[i]->Genes.push_back(Temp->Genes[k]);
+								}
 							}
 							for (int k=0; k < int(Temp->LogicNodes.size()); k++) {
 								LogicNodes[i]->LogicNodes.push_back(Temp->LogicNodes[k]);
