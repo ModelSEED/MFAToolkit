@@ -1564,7 +1564,8 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 		InParameters->AllReactionsUse = true;
 		// Require the reaction to have some minimum flux in order for the reaction use variable to have a value of 1
 		SetParameter("Add positive use variable constraints", "1");
-		SetParameter("Minimum flux for use variable positive constraint", GetParameter("Solver tolerance").data());
+		// Use the value specified by user.
+		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
 	if (InParameters->GeneConstraints || InParameters->ThermoConstraints || (InParameters->LoadForeignDB && InParameters->MinimizeForeignReactions)) {
 		InParameters->ReactionsUse = true;

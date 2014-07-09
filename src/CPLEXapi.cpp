@@ -195,7 +195,12 @@ OptSolutionData* CPLEXRunSolver(int ProbType) {
 			return NULL;
 		}
 		//Deactivates all messages from MIP solver
-		Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_MILP);
+		if (ProbType == MIQP) {
+			Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_MIQP);			
+		} else {
+			Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_MILP);
+		}
+
 		Status = CPXmipopt (CPLEXenv, CPLEXModel);
 	} else if(ProbType == QP) {
 		Status = CPXqpopt (CPLEXenv, CPLEXModel);

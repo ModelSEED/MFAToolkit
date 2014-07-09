@@ -214,6 +214,12 @@ void MFAProblem::DetermineProbType() {
 		}
 	}
 
+	if (GetObjective()->ConstraintType == NONLINEAR) {
+		Nonlinear = true;
+	} else if (GetObjective()->ConstraintType == QUADRATIC) {
+		Quadratic = true;
+	}
+
 	if (Integer) {
 		if (Nonlinear) {
 			ProbType = MINP;
@@ -8373,6 +8379,7 @@ int MFAProblem::SoftConstraint(Data* InData) {
 }
 
 /*FitFitGeneActivtyState
+Core function for the method Tintle2014
 Author: Shinnosuke Kondo, Hope College, 5/14/2014.
 Description: TODO*/
 int MFAProblem::FitGeneActivtyState(Data* InData) {
@@ -8409,7 +8416,7 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		return FAIL;
 	}
 	// kappa represents a weighting of the penalty function; Shin will update this
-	double Kappa = atof((*GeneCoef)[0].data());
+	double w = atof((*GeneCoef)[0].data());
 
 	map<string,double> CoeffMap;
 	map<string,string> CaseMap;
@@ -8422,49 +8429,67 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		}
 		delete CoefTrio;
 	}
-
-	// Change the coefficient for penalties so that both range is between 0 and 1 without Kappa.
-	Kappa = ObjectiveValue * Kappa / 0.5 / CoeffMap.size();
-	if (FMax()) {
-	  Kappa = -1* Kappa; // Because the new objective should be minimized.
-	}
-	double originalGrowth = GetObjective()->Variables[0]->Value;
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());	
+	double Kappa;
+	if (w == 0) {
+		// NewObjective = InitializeLinEquation();		
+		// NewObjective->Variables.push_back(GetObjective()->Variables[0]);
+		// NewObjective->Coefficient.push_back(GetObjective()->Coefficient[0]);
+		NewObjective->ConstraintType = QUADRATIC;
+	} else {
+		Kappa = (1 - w) / w;
+		// Change the coefficient for penalties so that both range is between 0 and 1 without Kappa.
+		Kappa = ObjectiveValue * Kappa / 0.5 / CoeffMap.size();
+		if (FMax()) {
+			Kappa = -1* Kappa; // Because the new objective should be minimized.
+		}		
+	}
+
+	double originalGrowth = GetObjective()->Variables[0]->Value;
 	for (int i=0; i < FNumVariables(); i++) {
 	  if (GetVariable(i)->Type == GENE_USE) {
 	    if (CoeffMap.count(GetVariable(i)->Name) > 0 && CaseMap[GetVariable(i)->Name] != "2" ) {
-	      if(CaseMap[GetVariable(i)->Name] == "1") {
-		//penalized if a gene is active
-		NewObjective->Variables.push_back(GetVariable(i));
-		NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
-	      } else if (CaseMap[GetVariable(i)->Name] == "3") {
-		//penalized if a gene is inactive
-		// Need to "not" Gene_Use vatiable.
-		MFAVariable* GeneUnuseVariable = InitializeMFAVariable();
-		GeneUnuseVariable->Name = ("Not_" + GetVariable(i)->Name);
-		GeneUnuseVariable->UpperBound = 1;
-		GeneUnuseVariable->LowerBound = 0;
-		GeneUnuseVariable->Binary = true;
-		GeneUnuseVariable->Type = GENE_UNUSE;
-		LoadVariable(AddVariable(GeneUnuseVariable));		      		      
+		    MFAVariable* NewVariable;		    
+		    if(CaseMap[GetVariable(i)->Name] == "1") {
+			    //penalized if a gene is active
+			    NewVariable = GetVariable(i);
+		    } else if (CaseMap[GetVariable(i)->Name] == "3") {
+			    //penalized if a gene is inactive
+			    // Need to "not" Gene_Use vatiable.
+			    MFAVariable* GeneUnuseVariable = InitializeMFAVariable();
+			    GeneUnuseVariable->Name = ("Not_" + GetVariable(i)->Name);
+			    GeneUnuseVariable->UpperBound = 1;
+			    GeneUnuseVariable->LowerBound = 0;
+			    GeneUnuseVariable->Binary = true;
+			    GeneUnuseVariable->Type = GENE_UNUSE;
+			    LoadVariable(AddVariable(GeneUnuseVariable));		      		      
+			    
+			    LinEquation* NewConstraint = InitializeLinEquation();
+			    NewConstraint->RightHandSide = 1;
+			    NewConstraint->EqualityType =EQUAL;
+			    NewConstraint->ConstraintType = LINEAR;
+			    NewConstraint->ConstraintMeaning.assign("Make one variable NOT of the other");
+			    NewConstraint->Coefficient.push_back(1);
+			    NewConstraint->Variables.push_back(GetVariable(i));
+			    NewConstraint->Coefficient.push_back(1);
+			    NewConstraint->Variables.push_back(GeneUnuseVariable);		      
+			    LoadConstToSolver(AddConstraint(NewConstraint));		      
 		
-		LinEquation* NewConstraint = InitializeLinEquation();
-		NewConstraint->RightHandSide = 1;
-		NewConstraint->EqualityType =EQUAL;
-		NewConstraint->ConstraintType = LINEAR;
-		NewConstraint->ConstraintMeaning.assign("Make one variable NOT of the other");
-		NewConstraint->Coefficient.push_back(1);
-		NewConstraint->Variables.push_back(GetVariable(i));
-		NewConstraint->Coefficient.push_back(1);
-		NewConstraint->Variables.push_back(GeneUnuseVariable);		      
-		LoadConstToSolver(AddConstraint(NewConstraint));		      
-		
-		NewObjective->Variables.push_back(GeneUnuseVariable);
-		NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
-	      } else {
-		// Unknown case
-		cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
-	      }
+			    NewVariable = GeneUnuseVariable;
+		    } else {
+			    // Unknown case
+			    cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
+			    continue;
+		    }
+		    if (w == 0) {
+			    NewObjective->QuadOne.push_back(GetObjective()->Variables[0]);
+			    NewObjective->QuadTwo.push_back(NewVariable);
+			    NewObjective->QuadCoeff.push_back(-1*GetObjective()->Coefficient[0] * CoeffMap[GetVariable(i)->Name] / 0.5 / CoeffMap.size());			    
+		    } else {
+			    NewObjective->Variables.push_back(NewVariable);
+			    NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
+		    }
+
 	    }
 	  }
 	}
@@ -8481,7 +8506,6 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	PrintProblemReport(newobjectivevalue,Parameters,Note);
 	delete GeneCoef;
 
-	double objectFraction = NewObjective->Variables[0]->Value / ObjectiveValue;
 	ofstream Output;
 	if (OpenOutput(Output,FOutputFilepath()+"GeneActivityStateFBAResult.txt")) {
 		Output << "Name\tValue" << endl;
@@ -8492,6 +8516,13 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		for (int i=1; i < NewObjective->Variables.size(); i++) {
 			Output << NewObjective->Variables[i]->Name << "\t" << NewObjective->Variables[i]->Value << endl;
 		}
+		for (int i=0; i < NewObjective->QuadOne.size(); i++) {
+			Output << NewObjective->QuadOne[i]->Name << "\t" << NewObjective->QuadOne[i]->Value << endl;
+		}
+		for (int i=0; i < NewObjective->QuadTwo.size(); i++) {
+			Output << NewObjective->QuadTwo[i]->Name << "\t" << NewObjective->QuadTwo[i]->Value << endl;
+		}
+
 	  Output.close();
 	}
 	return SUCCESS;
