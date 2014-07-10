@@ -8430,18 +8430,20 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 	}
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());
 
-	// Since it is easier to handle, the whole objective is divied by w.
-	// This way, the new coeffcient for biomass is 1,
-	// and the one for Gene Penalty is Kappa.
-	double Kappa;
+	// Since it is easier to handle, the whole objective is divided by w.
+	// This way, the new coeffcient for biomass is 1.
+	// and the one for Gene Penalty is the fraction (1-w)/w
+	double fractional_w;
 	if (w == 0) {
-		NewObjective->ConstraintType = QUADRATIC;
+	  NewObjective->ConstraintType = QUADRATIC; // special case since we can't divide by zero
 	} else {
-		Kappa = (1 - w) / w;
-		// Change the coefficient for penalties so that both range is between 0 and 1 without Kappa.
-		Kappa = ObjectiveValue * Kappa / 0.5 / CoeffMap.size();
+	  NewObjective->ConstraintType = LINEAR;
+		fractional_w = (1 - w) / w;
+		// we want the contributions of the biomass and the gene penalty to be on equivalent scales, so we 
+		// change the coefficient for gene penalty so that it ranges between 0 and the ObjectiveValue (before multiplying by fractional_w).
+		fractional_w = ObjectiveValue * fractional_w / 0.5 / CoeffMap.size();
 		if (FMax()) {
-			Kappa = -1* Kappa; // Because the new objective should be minimized.
+			fractional_w = -1* fractional_w; // Because the new objective should be minimized.
 		}		
 	}
 
@@ -8487,7 +8489,7 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 			    NewObjective->QuadCoeff.push_back(-1*GetObjective()->Coefficient[0] * CoeffMap[GetVariable(i)->Name] / 0.5 / CoeffMap.size());			    
 		    } else {
 			    NewObjective->Variables.push_back(NewVariable);
-			    NewObjective->Coefficient.push_back(Kappa * CoeffMap[GetVariable(i)->Name]);		      
+			    NewObjective->Coefficient.push_back(fractional_w * CoeffMap[GetVariable(i)->Name]);		      
 		    }
 
 	    }
