@@ -8415,7 +8415,6 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		cerr << "No gene activity state information!" << endl;
 		return FAIL;
 	}
-	// kappa represents a weighting of the penalty function; Shin will update this
 	double w = atof((*GeneCoef)[0].data());
 
 	map<string,double> CoeffMap;
@@ -8429,12 +8428,13 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		}
 		delete CoefTrio;
 	}
-	LinEquation* NewObjective = CloneLinEquation(GetObjective());	
+	LinEquation* NewObjective = CloneLinEquation(GetObjective());
+
+	// Since it is easier to handle, the whole objective is divied by w.
+	// This way, the new coeffcient for biomass is 1,
+	// and the one for Gene Penalty is Kappa.
 	double Kappa;
 	if (w == 0) {
-		// NewObjective = InitializeLinEquation();		
-		// NewObjective->Variables.push_back(GetObjective()->Variables[0]);
-		// NewObjective->Coefficient.push_back(GetObjective()->Coefficient[0]);
 		NewObjective->ConstraintType = QUADRATIC;
 	} else {
 		Kappa = (1 - w) / w;
