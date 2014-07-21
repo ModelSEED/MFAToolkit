@@ -161,6 +161,8 @@
 #define POTENTIAL 28
 #define SMALL_DELTAG_ERROR_USE 29
 #define LARGE_DELTAG_ERROR_USE 30
+#define GENE_UNUSE 31
+#define REACTION_CONSTRAINT 32
 
 //Logic types
 #define AND 0

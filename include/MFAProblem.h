@@ -156,6 +156,7 @@ public:
 	int FitMicroarrayAssertions(Data* InData);
 	int FitGIMME(Data* InData);
 	int SoftConstraint(Data* InData);
+	int FitGeneActivtyState(Data* InData);
 	int GenerateMinimalReactionLists(Data* InData);
 	int ParseRegExp(OptimizationParameter* InParameters, Data* InData, string Expression);
 	int AddRegulatoryConstraints(OptimizationParameter* InParameters, Data* InData);

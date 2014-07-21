@@ -555,8 +555,17 @@ int Reaction::ParseGeneString(string InGeneString) {
 				}
 				NodeAtLevel[Node->Level-1] = Node;
 			}
-			//Adding gene to the logic node
-			Node->Genes.push_back(Temp);
+
+			bool newGene = true;
+			//Adding gene to the logic node if there isn't duplication.
+			for (int i = 0; i < Node->Genes.size();i++) {
+			  if (Node->Genes[i] == Temp) {
+			    newGene = false;
+			  } 
+			}
+			if (newGene) {
+			  Node->Genes.push_back(Temp);
+			}
 		}
 	}
 	//Checking syntax
@@ -592,7 +601,16 @@ int Reaction::ParseGeneString(string InGeneString) {
 						if ((Temp->Genes.size()+Temp->LogicNodes.size()) == 1 || Temp->Logic ==  LogicNodes[i]->Logic) {
 							Change = true;
 							for (int k=0; k < int(Temp->Genes.size()); k++) {
-								LogicNodes[i]->Genes.push_back(Temp->Genes[k]);
+								bool newGene = true;
+								//Adding gene to the parent logic node if there isn't duplication.
+								for (int l = 0; l < LogicNodes[i]->Genes.size();l++) {
+									if (LogicNodes[i]->Genes[l] == Temp->Genes[k]) {
+										newGene = false;
+									} 
+								}
+								if (newGene) {
+									LogicNodes[i]->Genes.push_back(Temp->Genes[k]);
+								}
 							}
 							for (int k=0; k < int(Temp->LogicNodes.size()); k++) {
 								LogicNodes[i]->LogicNodes.push_back(Temp->LogicNodes[k]);
@@ -3415,8 +3433,6 @@ vector<LinEquation*> Reaction::CreateGeneReactionConstraints() {
 			if(LogicNodes[i] != NULL && LogicNodes[i]->Logic == OR) {
 				//0 < summation Ci - x
 				LinEquation* NewLowerConstraint = InitializeLinEquation("Gene-reaction mapping or lower constraint",0,GREATER);
-				//summation Ci - Kx < 0
-				LinEquation* NewUpperConstraint = InitializeLinEquation("Gene-reaction mapping or upper constraint",0,LESS);
 				//Adding the reaction use variables to the gene reaction constraint
 				MFAVariable* ReactionUseVariable = NULL;
 				if (LogicNodes[i] == GeneRootNode) {
@@ -3424,55 +3440,40 @@ vector<LinEquation*> Reaction::CreateGeneReactionConstraints() {
 					if (ReactionUseVariable != NULL) {
 						NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 						NewLowerConstraint->Coefficient.push_back(-1);
-						NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-						NewUpperConstraint->Coefficient.push_back(-1*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 					} else {
 						ReactionUseVariable = GetMFAVar(FORWARD_USE);
 						if (ReactionUseVariable != NULL) {
 							NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 							NewLowerConstraint->Coefficient.push_back(-1);
-							NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-							NewUpperConstraint->Coefficient.push_back(-1*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 						}
 						ReactionUseVariable = GetMFAVar(REVERSE_USE);
 						if (ReactionUseVariable != NULL) {
 							NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 							NewLowerConstraint->Coefficient.push_back(-1);
-							NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-							NewUpperConstraint->Coefficient.push_back(-1*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 						}
 					}
 				} else {
 					ReactionUseVariable = NodeVarMap[LogicNodes[i]];
 					NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 					NewLowerConstraint->Coefficient.push_back(-1);
-					NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-					NewUpperConstraint->Coefficient.push_back(-1*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 				}
 				
 				for(int j=0; j < int(LogicNodes[i]->LogicNodes.size());j++ ){
 					NewLowerConstraint->Variables.push_back(NodeVarMap[LogicNodes[i]->LogicNodes[j]]);
 					NewLowerConstraint->Coefficient.push_back(1);
-					NewUpperConstraint->Variables.push_back(NodeVarMap[LogicNodes[i]->LogicNodes[j]]);
-					NewUpperConstraint->Coefficient.push_back(1);
 				}
 				for(int j=0; j < int(LogicNodes[i]->Genes.size());j++ ){
 					MFAVariable* GeneVar = LogicNodes[i]->Genes[j]->GetMFAVar();
 					if (GeneVar != NULL) {
 						NewLowerConstraint->Variables.push_back(GeneVar);
 						NewLowerConstraint->Coefficient.push_back(1);
-						NewUpperConstraint->Variables.push_back(GeneVar);
-						NewUpperConstraint->Coefficient.push_back(1);
 					}
 				}
 				AllConstraints.push_back(NewLowerConstraint);
-				AllConstraints.push_back(NewUpperConstraint);
 			//AND constrains
 			} else if (LogicNodes[i] != NULL) {
 				//-1 < 2Summation Ci - 2Kx
 				LinEquation* NewLowerConstraint = InitializeLinEquation("Gene-reaction mapping and lower constraint",-1,GREATER);
-				//2Summation Ci - 2Kx < (2K-1) 
-				LinEquation* NewUpperConstraint = InitializeLinEquation("Gene-reaction mapping and lower constraint",(2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()))-1,LESS);				
 				//Adding the reaction use variables to the gene reaction constraint
 				MFAVariable* ReactionUseVariable = NULL;
 				if (LogicNodes[i] == GeneRootNode) {
@@ -3480,49 +3481,36 @@ vector<LinEquation*> Reaction::CreateGeneReactionConstraints() {
 					if (ReactionUseVariable != NULL) {
 						NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 						NewLowerConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
-						NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-						NewUpperConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 					} else {
 						ReactionUseVariable = GetMFAVar(FORWARD_USE);
 						if (ReactionUseVariable != NULL) {
 							NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 							NewLowerConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
-							NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-							NewUpperConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 						}
 						ReactionUseVariable = GetMFAVar(REVERSE_USE);
 						if (ReactionUseVariable != NULL) {
 							NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 							NewLowerConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
-							NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-							NewUpperConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 						}
 					}
 				} else {
 					ReactionUseVariable = NodeVarMap[LogicNodes[i]];
 					NewLowerConstraint->Variables.push_back(ReactionUseVariable);
 					NewLowerConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
-					NewUpperConstraint->Variables.push_back(ReactionUseVariable);
-					NewUpperConstraint->Coefficient.push_back(-2*int(LogicNodes[i]->Genes.size()+LogicNodes[i]->LogicNodes.size()));
 				}
 				
 				for(int j=0; j < int(LogicNodes[i]->LogicNodes.size());j++ ){
 					NewLowerConstraint->Variables.push_back(NodeVarMap[LogicNodes[i]->LogicNodes[j]]);
 					NewLowerConstraint->Coefficient.push_back(2);
-					NewUpperConstraint->Variables.push_back(NodeVarMap[LogicNodes[i]->LogicNodes[j]]);
-					NewUpperConstraint->Coefficient.push_back(2);
 				}
 				for(int j=0; j < int(LogicNodes[i]->Genes.size());j++ ){
 					MFAVariable* GeneVar = LogicNodes[i]->Genes[j]->GetMFAVar();
 					if (GeneVar != NULL) {
 						NewLowerConstraint->Variables.push_back(GeneVar);
 						NewLowerConstraint->Coefficient.push_back(2);
-						NewUpperConstraint->Variables.push_back(GeneVar);
-						NewUpperConstraint->Coefficient.push_back(2);
 					}
 				}
 				AllConstraints.push_back(NewLowerConstraint);
-				AllConstraints.push_back(NewUpperConstraint);
 			}
 		}
 	} else {

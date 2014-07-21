@@ -1231,6 +1231,13 @@ void Data::PerformMFA() {
 		return;
 	}
 
+	if (GetParameter("Gene Activity State").length() > 0 && GetParameter("Gene Activity State").compare("NONE") != 0) {
+		NewProblem->FitGeneActivtyState(this);
+		delete NewProblem;
+		return;
+	}
+
+
 	//Generating pathways to objective
 	if (GetParameter("Generate pathways to objective").compare("1") == 0) {
 		NewProblem->GenerateMinimalReactionLists(this);

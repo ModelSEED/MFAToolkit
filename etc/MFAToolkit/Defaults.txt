@@ -230,6 +230,9 @@ Low energy compounds|cpd00013;cpd00011;cpd11493;cpd00009;cpd00012;cpd00010;cpd00
 automatically add H to balance|1|This binary variable indicates whether H+ should be added when the hydrogens in a reaction are imbalanced. H+ is only add if H is the only imbalanced atom in the reaction.|Reaction calculation specifications
 Generate pathways to objective|0|0|MFA parameters
 Microarray assertions|NONE|MFA parameters
+Gene Inactivity Moderated by Metabolism and Expression|NONE|MFA parameters
+Soft Constraint|NONE|MFA parameters
+Gene Activity State|NONE|MFA parameters
 error multiplier|4|multiplier for the range of deltaG error to allow|MFA parameters
 Compounds excluded from potential constraints|none|Create Gibbs energy constraints for all but the compounds listed in this parameter|MFA Parameter
 Compounds to have potential constraint|ALL|Only create Gibbs energy constraints for these compounds or ALL or PConstraintsFile.txt|MFA Parameter
