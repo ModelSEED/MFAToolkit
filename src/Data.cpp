@@ -1262,7 +1262,7 @@ void Data::PerformMFA() {
 		
 		//Running the gap filling algorithm
 		if (GetParameter("Complete gap filling").compare("1") == 0) {
-			NewProblem->CompleteGapFilling(this,NewParameters);
+			NewProblem->CompleteGapFilling(this,NewParameters,GetParameter("Fast gap filling").compare("1") == 0);
 			ClearParameters(NewParameters);
 			delete NewProblem;
 		} else if (GetParameter("Gap filling runs").compare("none") == 0) {

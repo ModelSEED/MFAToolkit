@@ -6215,7 +6215,7 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 	return SUCCESS;
 }
 
-int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParameters) {
+int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParameters,bool fastgapfill) {
 	double start = double(time(NULL));
 	//Loading list of inactive reactions in model
 	vector<string> InitialInactiveReactions = ReadStringsFromFile(FOutputFilepath()+"InactiveModelReactions.txt",false);
@@ -6327,8 +6327,10 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	ClearVariables();
 	ClearObjective();
 	ClearSolutions();
-	InParameters->ReactionsUse = true;
-	InParameters->AllReactionsUse = true;
+	if (!fastgapfill) {
+		InParameters->ReactionsUse = true;
+		InParameters->AllReactionsUse = true;
+	}
 	InParameters->AllReversible = true;
 	InParameters->DecomposeReversible = true;
 	double minimumFlux = atof(GetParameter("Minimum flux for use variable positive constraint").data());
@@ -6349,7 +6351,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 		}
 	}
 	map<MFAVariable*,double,std::less<MFAVariable*> > VariableCoefficients;
-	if (this->CalculateGapfillCoefficients(InData,InParameters,InactiveVar,VariableCoefficients) != SUCCESS) {
+	if (this->CalculateGapfillCoefficients(InData,InParameters,InactiveVar,VariableCoefficients,fastgapfill) != SUCCESS) {
 		FErrorFile() << "Failed to calculate reaction coefficients" << endl;
 		FlushErrorFile();
 		return FAIL;
@@ -6477,7 +6479,11 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 				constraint->RightHandSide = minimumFlux;
 				for (int j=0; j < int(oldObjective->Variables.size()); j++) {
 					if (oldObjective->Coefficient[j] > 0) {
-						oldObjective->Variables[j]->UpperBound = 1;
+						if (fastgapfill) {
+							oldObjective->Variables[j]->UpperBound = 10000;
+						} else {
+							oldObjective->Variables[j]->UpperBound = 1;
+						}
 					}
 				}
 				this->ResetSolver();
@@ -6486,13 +6492,44 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 					WriteLPFile();
 					return SUCCESS;
 				}
-				vector<int> VariableTypes;
-				VariableTypes.push_back(OBJECTIVE_TERMS);
-				int TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
+				int TotalSolution = 1;
+				vector<string>* SolutionArray = NULL;
+				if (fastgapfill) {
+					OptSolutionData* solution = RunSolver(false,false,false);
+					SolutionArray = new vector<string>;
+					if (solution->Status == SUCCESS && solution->Objective > MFA_ZERO_TOLERANCE) {
+						string solutionstring(":");
+						double cost = 0;
+						for (int j=0; j < int(oldObjective->Variables.size()); j++) {
+							if (solution->SolutionData[oldObjective->Variables[j]->Index] > MFA_ZERO_TOLERANCE) {
+								cost = cost + oldObjective->Coefficient[j];
+								if (solutionstring.size() > 1) {
+									solutionstring.append(",");
+								}
+								if (oldObjective->Variables[j]->Type == REVERSE_FLUX) {
+									solutionstring.append("-");
+								} else {
+									solutionstring.append("+");
+								}
+								solutionstring.append(oldObjective->Variables[j]->Name);
+							}
+						}
+						solutionstring.insert(0,dtoa(cost));
+						cout << solutionstring << endl;
+						SolutionArray->push_back(solutionstring);
+					}
+				} else {
+					vector<int> VariableTypes;
+					VariableTypes.push_back(OBJECTIVE_TERMS);
+					TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
+					if (TotalSolution > 0) {
+						SolutionArray = StringToStrings(GetParameter("Current gap filling solutions"),"|");
+					}
+
+				}
 				//Printing the gap filling output
-				if (TotalSolution > 0) {
+				if (SolutionArray != NULL && SolutionArray->size() > 0) {
 					//Parsing solution results
-					vector<string>* SolutionArray = StringToStrings(GetParameter("Current gap filling solutions"),"|");
 					string SolutionCosts;
 					string Solutions;
 					//Printing the run results
@@ -6575,367 +6612,15 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	return SUCCESS;
 }
 
-//int MFAProblem::FastCompleteGapFilling(Data* InData, OptimizationParameter* InParameters) {
-//	double start = double(time(NULL));
-//	//Loading list of inactive reactions in model
-//	vector<string> InitialInactiveReactions = ReadStringsFromFile(FOutputFilepath()+"InactiveModelReactions.txt",false);
-//	map<string,Reaction*,std::less<string> > InitialInactiveVar;
-//	for (int i=0; i < int(InitialInactiveReactions.size()); i++) {
-//		Reaction* tempRxn = InData->FindReaction("DATABASE",InitialInactiveReactions[i].data());
-//		if (tempRxn != NULL) {
-//			InitialInactiveVar[InitialInactiveReactions[i]] = tempRxn;
-//		}
-//	}
-//	//Clearing the problem if it already exists
-//	if (FNumVariables() > 0) {
-//		ClearConstraints();
-//		ClearVariables();
-//		ClearObjective();
-//	}
-//	ClearSolutions();
-//	//First we load the complete reaction list from file
-//	this->LoadBiomassDrainReactions(InData,InParameters);
-//	if (GetParameter("Add DB reactions for gapfilling").compare("1") == 0) {
-//		if (this->LoadGapFillingReactions(InData,InParameters) != SUCCESS) {
-//			return FAIL;
-//		}
-//	}
-//	//Setting up initial problem to identify unfixable reactions
-//	InParameters->ReactionsUse = false;
-//	InParameters->AllReactionsUse = false;
-//	InParameters->AllReversible = true;
-//	InParameters->DecomposeReversible = false;
-//	if (BuildMFAProblem(InData,InParameters) != SUCCESS) {
-//		FErrorFile() << "Failed to build optimization problem." << endl;
-//		FlushErrorFile();
-//		return FAIL;
-//	}
-//	LinEquation* constraint = InitializeLinEquation("Forcing inactive reaction to be active",0.000001,GREATER,LINEAR);
-//	this->AddObjective(constraint);
-//	this->SetMax();
-//	vector<string> InactiveReactions;
-//	vector<int> Repaired;
-//	vector<string> FailedReactions;
-//	ofstream output;
-//	if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data())) {
-//		output << "Target reaction\tGapfilled reactions\tActivated reactions\tCount\tTime\tRound repaired" << endl;
-//		output.close();
-//	}
-//	for (int i=0; i < int(InitialInactiveReactions.size()); i++) {
-//		if (InitialInactiveReactions[i].length() > 0) {
-//			constraint->Variables.clear();
-//			constraint->Coefficient.clear();
-//			if (InitialInactiveReactions[i].length() > 3 && InitialInactiveReactions[i].substr(0,3).compare("drn") == 0) {
-//				string id = InitialInactiveReactions[i].substr(3);
-//				for (int j =0; j < this->FNumVariables(); j++) {
-//					if (this->GetVariable(j)->AssociatedSpecies != NULL && this->GetVariable(j)->AssociatedSpecies->GetData("DATABASE",STRING).compare(id) == 0 && this->GetVariable(j)->Compartment == GetCompartment("c")->Index) {
-//						if (this->GetVariable(j)->Type == REVERSE_DRAIN_FLUX) {
-//							constraint->Variables.push_back(this->GetVariable(j));
-//							constraint->Coefficient.push_back(1);
-//						}
-//					}
-//				}
-//			} else {
-//				MFAVariable* currVar = InitialInactiveVar[InitialInactiveReactions[i]]->GetMFAVar(FLUX);
-//				if (currVar != NULL) {
-//					constraint->Variables.push_back(currVar);
-//					constraint->Coefficient.push_back(1);
-//				}
-//				currVar = InitialInactiveVar[InitialInactiveReactions[i]]->GetMFAVar(FORWARD_FLUX);
-//				if (currVar != NULL) {
-//					constraint->Variables.push_back(currVar);
-//					constraint->Coefficient.push_back(1);
-//				}
-//				currVar = InitialInactiveVar[InitialInactiveReactions[i]]->GetMFAVar(REVERSE_FLUX);
-//				if (currVar != NULL) {
-//					constraint->Variables.push_back(currVar);
-//					constraint->Coefficient.push_back(1);
-//				}
-//			}
-//			if (i == 0) {
-//				this->ResetSolver();
-//				this->LoadSolver();
-//			} else {
-//				this->LoadObjective();
-//			}
-//			OptSolutionData* solution = RunSolver(false,false,false);
-//			if (solution->Status == SUCCESS && solution->Objective < MFA_ZERO_TOLERANCE) {
-//				string noGrowth("");
-//				if (InitialInactiveReactions[i].substr(0,3).compare("bio") == 0) {
-//					string note;
-//					CheckIndividualMetaboliteProduction(InData,InParameters,GetParameter("metabolites to optimize"),false,false,note,true);
-//					noGrowth = GetParameter("No growth metabolites");
-//					this->LoadSolver();
-//				}
-//				string tmpNote;
-//				FailedReactions.push_back(InitialInactiveReactions[i]);
-//				if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-//					cout << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--\t" << noGrowth << endl;
-//					output << InitialInactiveReactions[i] << "\tFAILED\tNONE\tPrelim\t" << (time(NULL)-start) << "\t--\t" << noGrowth << endl;
-//					output.close();
-//				}
-//			} else {
-//				Repaired.push_back(-1);
-//				InactiveReactions.push_back(InitialInactiveReactions[i]);
-//			}
-//		}
-//	}
-//	//Setting up the gapfilling problem
-//	delete constraint;
-//	ObjFunct = NULL;
-//	ClearConstraints();
-//	ClearVariables();
-//	ClearObjective();
-//	ClearSolutions();
-//	//InParameters->ReactionsUse = true;
-//	//InParameters->AllReactionsUse = true;
-//	InParameters->AllReversible = true;
-//	InParameters->DecomposeReversible = true;
-//	double minimumFlux = atof(GetParameter("Minimum flux for use variable positive constraint").data());
-//	//Building the problem from the model
-//	if (BuildMFAProblem(InData,InParameters) != SUCCESS) {
-//		FErrorFile() << "Failed to build optimization problem." << endl;
-//		FlushErrorFile();
-//		return FAIL;
-//	}
-//	//Loading objective coefficients or calculating from parameters
-//	map<string,Reaction*,std::less<string> > InactiveVar;
-//	map<Reaction*,int,std::less<Reaction*> > InactiveIndecies;
-//	for (int i=0; i < int(InactiveReactions.size()); i++) {
-//		Reaction* tempRxn = InData->FindReaction("DATABASE",InactiveReactions[i].data());
-//		if (tempRxn != NULL) {
-//			InactiveVar[InactiveReactions[i]] = tempRxn;
-//			InactiveIndecies[tempRxn] = i;
-//		}
-//	}
-//	map<MFAVariable*,double,std::less<MFAVariable*> > VariableCoefficients;
-//	if (this->CalculateGapfillCoefficients(InData,InParameters,InactiveVar,VariableCoefficients) != SUCCESS) {
-//		FErrorFile() << "Failed to calculate reaction coefficients" << endl;
-//		FlushErrorFile();
-//		return FAIL;
-//	}
-//	//Creating objective function
-//	LinEquation* oldObjective = InitializeLinEquation("Gapfilling objective");
-//	vector<vector<int> > InactiveObjectiveIndecies(InactiveReactions.size());
-//	for (map<MFAVariable*,double,std::less<MFAVariable*> >::iterator mapIT = VariableCoefficients.begin(); mapIT != VariableCoefficients.end(); mapIT++) {
-//		cout << mapIT->second << " " << mapIT->first->AssociatedReaction->GetData("DATABASE",STRING) << " " << ConvertVariableType(mapIT->first->Type) << endl;
-//		oldObjective->Variables.push_back(mapIT->first);
-//		oldObjective->Coefficient.push_back(mapIT->second);
-//		if (mapIT->second < 0) {
-//			if (InactiveIndecies.count(mapIT->first->AssociatedReaction) > 0) {
-//				InactiveObjectiveIndecies[InactiveIndecies[mapIT->first->AssociatedReaction]].push_back(oldObjective->Variables.size()-1);
-//			}
-//			LinEquation* UseVarConstraint = CreateUseVariablePositiveConstraint(mapIT->first,InParameters);
-//			if (UseVarConstraint != NULL) {
-//				AddConstraint(UseVarConstraint);
-//			}
-//		}
-//	}
-//	this->AddObjective(oldObjective);
-//	//Creating forcing constraint
-//	constraint = InitializeLinEquation("Forcing inactive reaction to be active",minimumFlux,GREATER,LINEAR);
-//	this->AddConstraint(constraint);
-//	//Creating output structures
-//	map<MFAVariable*,bool,std::less<Reaction*> > AddedReactions;
-//	//Creating variable sets for objective and forcing constraint for each inactive object
-//	vector<vector<MFAVariable*> > InactiveVariables;
-//	vector<vector<double> > InactiveCoeficients;
-//	for (int i=0; i < int(InactiveReactions.size()); i++) {
-//		vector<MFAVariable*> newVariables;
-//		vector<double> newCoeficients;
-//		if (InactiveReactions[i].length() > 3 && InactiveReactions[i].substr(0,3).compare("drn") == 0) {
-//			string id = InactiveReactions[i].substr(3);
-//			for (int j =0; j < this->FNumVariables(); j++) {
-//				if (this->GetVariable(j)->AssociatedSpecies != NULL && this->GetVariable(j)->AssociatedSpecies->GetData("DATABASE",STRING).compare(id) == 0 && this->GetVariable(j)->Compartment == GetCompartment("c")->Index) {
-//					if (this->GetVariable(j)->Type == REVERSE_DRAIN_FLUX) {
-//						newVariables.push_back(this->GetVariable(j));
-//						newCoeficients.push_back(1);
-//					}
-//				}
-//			}
-//		} else {
-//			MFAVariable* currVar = InactiveVar[InactiveReactions[i]]->GetMFAVar(FLUX);
-//			if (currVar != NULL) {
-//				newVariables.push_back(currVar);
-//				newCoeficients.push_back(1);
-//			}
-//			currVar = InactiveVar[InactiveReactions[i]]->GetMFAVar(FORWARD_FLUX);
-//			if (currVar != NULL) {
-//				newVariables.push_back(currVar);
-//				newCoeficients.push_back(1);
-//			}
-//			currVar = InactiveVar[InactiveReactions[i]]->GetMFAVar(REVERSE_FLUX);
-//			if (currVar != NULL) {
-//				newVariables.push_back(currVar);
-//				newCoeficients.push_back(1);
-//			}
-//		}
-//		InactiveVariables.push_back(newVariables);
-//		InactiveCoeficients.push_back(newCoeficients);
-//	}
-//	//Looping over all inactive reactions in prioritized order
-//	int count = 0;
-//	bool firstSolution = false;
-//	for (int i=0; i < int(InactiveReactions.size()); i++) {
-//		//Gapfilling the inactive reaction if it is still nonfunctional
-//		string activated("");
-//		string gapfilled("");
-//		if (Repaired[i] == -1) {
-//			//Checking all reactions to determine if they are now functional
-//			ObjFunct = NULL;
-//			constraint->RightHandSide = -10000;
-//			this->AddObjective(constraint);
-//			this->SetMax();
-//			for (int j=0; j < int(oldObjective->Variables.size()); j++) {
-//				if (oldObjective->Coefficient[j] > 0) {
-//					oldObjective->Variables[j]->UpperBound = 0;
-//				}
-//			}
-//			bool first = true;
-//			for (int k=0; k < int(InactiveReactions.size()); k++) {
-//				if (Repaired[k] == -1) {
-//					constraint->Variables.clear();
-//					constraint->Coefficient.clear();
-//					for (int j=0; j < int(InactiveVariables[k].size()); j++) {
-//						constraint->Variables.push_back(InactiveVariables[k][j]);
-//						constraint->Coefficient.push_back(InactiveCoeficients[k][j]);
-//					}
-//					if (constraint->Variables.size() > 0) {
-//						if (first) {
-//							this->ResetSolver();
-//							this->LoadSolver();
-//							first = false;
-//						} else {
-//							this->LoadObjective();
-//						}
-//						OptSolutionData* solution = RunSolver(false,false,false);
-//						if (solution->Status == SUCCESS && solution->Objective > MFA_ZERO_TOLERANCE) {
-//							if (count == 0) {
-//								Repaired[k] = 0;
-//							} else {
-//								Repaired[k] = count-1;
-//							}
-//							//Zeroing out the inactive coefficient in the objective function
-//							for(int m=0; m < int(InactiveObjectiveIndecies[k].size()); m++) {
-//								oldObjective->Coefficient[InactiveObjectiveIndecies[k][m]] = 0;
-//							}
-//						}
-//						delete solution;
-//					}
-//				}
-//			}
-//			if (Repaired[i] == -1) {
-//				ObjFunct = NULL;
-//				this->AddObjective(oldObjective);
-//				this->SetMin();
-//				constraint->Variables.clear();
-//				constraint->Coefficient.clear();
-//				for (int j=0; j < int(InactiveVariables[i].size()); j++) {
-//					constraint->Variables.push_back(InactiveVariables[i][j]);
-//					constraint->Coefficient.push_back(InactiveCoeficients[i][j]);
-//				}
-//				constraint->RightHandSide = minimumFlux;
-//				for (int j=0; j < int(oldObjective->Variables.size()); j++) {
-//					if (oldObjective->Coefficient[j] > 0) {
-//						oldObjective->Variables[j]->UpperBound = 1;
-//					}
-//				}
-//				this->ResetSolver();
-//				this->LoadSolver();
-//				if (GetParameter("just print LP file").compare("1") == 0) {
-//					WriteLPFile();
-//					return SUCCESS;
-//				}
-//				vector<int> VariableTypes;
-//				VariableTypes.push_back(OBJECTIVE_TERMS);
-//				int TotalSolution = RecursiveMILP(InData,InParameters,VariableTypes,true);
-//				//Printing the gap filling output
-//				if (TotalSolution > 0) {
-//					//Parsing solution results
-//					vector<string>* SolutionArray = StringToStrings(GetParameter("Current gap filling solutions"),"|");
-//					string SolutionCosts;
-//					string Solutions;
-//					//Printing the run results
-//					double Cost = 0;
-//					for (int k=0; k < int(SolutionArray->size()); k++) {
-//						if ((*SolutionArray)[k].length() > 0) {
-//							vector<string>* SolutionDataArray = StringToStrings((*SolutionArray)[k],":");
-//							double Cost = atof((*SolutionDataArray)[0].data());
-//							if (Cost > MFA_ZERO_TOLERANCE && SolutionDataArray->size() > 1 && (*SolutionDataArray)[1].length() > 0) {
-//								if (gapfilled.length() > 0) {
-//									gapfilled.append("|");
-//								}
-//								gapfilled.append((*SolutionDataArray)[1]);
-//								map<Reaction*,bool,std::less<Reaction*> > activatedReactions;
-//								vector<string>* SolutionReactions = StringToStrings((*SolutionDataArray)[1],",");
-//								string currentGapfilling("");
-//								for (int j=0; j < int(SolutionReactions->size()); j++) {
-//									if (currentGapfilling.length() > 0) {
-//										currentGapfilling.append(";");
-//									}
-//									currentGapfilling.append((*SolutionReactions)[j]);
-//									// Zero out the objective coefficient for reactions added by gapfilling
-//									// There might be a more efficient way to get this index... but I want to make sure I'm zeroing out the right reaction
-//									// and the index for OldObjective is not the same as the index for SolutionReactions.
-//									//
-//									// Note - this probably wil break things if we are trying to get muleiple solutions to multiple inactive reactions.
-//									for ( int n=0; n < oldObjective->Variables.size(); n++ ) {
-//									  if ( oldObjective->Variables[n]->AssociatedReaction->GetData("DATABASE", STRING).compare((*SolutionReactions)[j]) == 0 ) {
-//									    oldObjective->Coefficient[n] = 0;
-//									    break;
-//									  }
-//									}
-//									//TODO: Handle activated reactions
-//									//activated.append(sign+oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
-//									//activatedReactions[oldObjective->Variables[j]->AssociatedReaction] = true;
-//								}
-//								delete SolutionReactions;
-//							}
-//							delete SolutionDataArray;
-//						}
-//					}
-//					delete SolutionArray;
-//					// zero out objective coefficients for the repaired reaction (mirroring what's done above if we mark a reaction as repared)
-//					for(int m=0; m < int(InactiveObjectiveIndecies[i].size()); m++) {
-//					  oldObjective->Coefficient[InactiveObjectiveIndecies[i][m]] = 0;
-//					}
-//					Repaired[i] = count;
-//				} else {
-//				  // Prevent repeatedly doing FBA after a failed gapfill.
-//				  Repaired[i] = -2;
-//					gapfilled = "FAILED";
-//					activated = "NONE";
-//				}
-//				count++;
-//			} else {
-//				gapfilled = "UNNEEDED";
-//				activated = "NONE";
-//			}
-//		} else {
-//			gapfilled = "UNNEEDED";
-//			activated = "NONE";
-//		}
-//		//Printing result for reaction
-//		if (OpenOutput(output,(FOutputFilepath()+"CompleteGapfillingOutput.txt").data(),true)) {
-//			cout << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
-//			output << InactiveReactions[i] << "\t" << gapfilled << "\t" << activated << "\t" << count << "/" << InactiveReactions.size() << "\t" << (time(NULL)-start) << "\t" << Repaired[i] << endl;
-//			output.close();
-//			if (firstSolution && GetParameter("Solve complete gapfilling only once").compare("1") == 0) {
-//				i = int(InactiveReactions.size());
-//			}
-//		}
-//	}
-//	ofstream outputTwo;
-//	if (OpenOutput(outputTwo,(FOutputFilepath()+"GapfillingComplete.txt").data())) {
-//		outputTwo << "Gapfilling completed:" << (time(NULL)-start) << endl;
-//		outputTwo.close();
-//	}
-//	ObjFunct = NULL;
-//	this->AddObjective(oldObjective);
-//	return SUCCESS;
-//}
-
-int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients) {
+int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients,bool fastgapfill) {
+	int forvar = FORWARD_USE;
+	int revvar = REVERSE_USE;
+	int univar = REACTION_USE;
+	if (fastgapfill == true) {
+		forvar = FORWARD_FLUX;
+		revvar = REVERSE_FLUX;
+		univar = FLUX;
+	}
 	map<MFAVariable*,double,std::less<MFAVariable*> > FileCoefficients;
 	if (GetParameter("Objective coefficient file").compare("NONE") != 0) {
 		vector<string> CoefficientList = ReadStringsFromFile(FOutputFilepath()+GetParameter("Objective coefficient file"),false);
@@ -6945,9 +6630,9 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				if ((*strings)[0].compare("forward") == 0) {
 					Reaction* currReaction = InData->FindReaction("DATABASE",(*strings)[1].data());
 					if (currReaction != NULL) {
-						MFAVariable* currVar = currReaction->GetMFAVar(FORWARD_USE);
+						MFAVariable* currVar = currReaction->GetMFAVar(forvar);
 						if (currVar == NULL) {
-							currVar = currReaction->GetMFAVar(REACTION_USE);
+							currVar = currReaction->GetMFAVar(univar);
 						}
 						if (currVar != NULL) {
 							FileCoefficients[currVar] = atof((*strings)[2].data());
@@ -6956,7 +6641,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				} else if ((*strings)[0].compare("reverse") == 0) {
 					Reaction* currReaction = InData->FindReaction("DATABASE",(*strings)[1].data());
 					if (currReaction != NULL) {
-						MFAVariable* currVar = currReaction->GetMFAVar(REVERSE_USE);
+						MFAVariable* currVar = currReaction->GetMFAVar(revvar);
 						if (currVar != NULL) {
 							FileCoefficients[currVar] = atof((*strings)[2].data());
 						}
@@ -7073,7 +6758,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 	map<MFAVariable*,double,std::less<MFAVariable*> > DatabasePenalties;
 	for (int i=0; i < InData->FNumReactions(); i++) {
 		if (InData->GetReaction(i)->GetData("FOREIGN",STRING).compare("BiomassRxn") == 0) {
-			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(forvar);
 			if (TempVariable != NULL) {
 				VariableCoefficients[TempVariable] = atof(GetParameter("Biomass component reaction penalty").data());
 			}
@@ -7172,7 +6857,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 			if (Coefficient < 0.5) {
 				Coefficient = 0.5;
 			}
-			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+			MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(forvar);
 			double ForwardPenalty = 0;
 			double BackwardPenalty = 0;
 			if (TempVariable != NULL) {
@@ -7187,7 +6872,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 					ThermoPenalties[TempVariable] = ThermodynamicPenalty;
 				}
 			}
-			TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
+			TempVariable = InData->GetReaction(i)->GetMFAVar(revvar);
 			if (TempVariable != NULL) {
 			  DatabasePenalties[TempVariable] = Coefficient;
 				if (InData->GetReaction(i)->FType() == FORWARD) {
@@ -7211,7 +6896,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				ThermodynamicPenalty += 1.5;
 			}
 			if (InData->GetReaction(i)->FType() == FORWARD) {
-				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(REVERSE_USE);
+				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(revvar);
 				if (TempVariable != NULL) {
 					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
 					ForwardPenalty = ThermodynamicPenalty;
@@ -7219,7 +6904,7 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 					DatabasePenalties[TempVariable] = 0;
 				}
 			} else if (InData->GetReaction(i)->FType() == REVERSE) {
-				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(FORWARD_USE);
+				MFAVariable* TempVariable = InData->GetReaction(i)->GetMFAVar(forvar);
 				if (TempVariable != NULL) {
 					VariableCoefficients[TempVariable] = ThermodynamicPenalty;
 					BackwardPenalty = ThermodynamicPenalty;
@@ -7248,16 +6933,16 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 	if (inactiveCoefficient != 0) {
 		for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
 			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(REACTION_USE);
+				MFAVariable* currVar = mapIT->second->GetMFAVar(univar);
 				if (currVar == NULL) {
-					currVar = mapIT->second->GetMFAVar(FORWARD_USE);
+					currVar = mapIT->second->GetMFAVar(forvar);
 				}
 				if (currVar != NULL) {
 					VariableCoefficients[currVar] = -inactiveCoefficient;
 				}
 			}
 			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(REVERSE_USE);
+				MFAVariable* currVar = mapIT->second->GetMFAVar(revvar);
 				if (currVar != NULL) {
 					VariableCoefficients[currVar] = -inactiveCoefficient;
 				}

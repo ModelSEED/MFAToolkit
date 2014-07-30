@@ -148,8 +148,8 @@ public:
 	int LoadBiomassDrainReactions(Data* InData, OptimizationParameter* InParameters);
 	int LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters);
 	int GapFilling(Data* InData, OptimizationParameter* InParameters, string Label = "NONE");
-	int CompleteGapFilling(Data* InData, OptimizationParameter* InParameters);
-	int CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients);
+	int CompleteGapFilling(Data* InData, OptimizationParameter* InParameters,bool fastgapfill = false);
+	int CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients,bool fastgapfill = false);
 	int GapGeneration(Data* InData, OptimizationParameter* InParameters);
 	int SolutionReconciliation(Data* InData, OptimizationParameter* InParameters);
 	string MediaSensitivityExperiment(Data* InData, OptimizationParameter* InParameters, vector<MFAVariable*> CurrentKO, vector<MFAVariable*> NonessentialMedia);
