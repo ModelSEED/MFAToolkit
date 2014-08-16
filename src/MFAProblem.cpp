@@ -3411,6 +3411,15 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	map<string,bool> inactiveReactions;
 	map<string,bool> compoundsToAssess;
 	SetParameter("tight bounds search variables","FLUX;FORWARD_FLUX;REVERSE_FLUX;DRAIN_FLUX;FORWARD_DRAIN_FLUX;REVERSE_DRAIN_FLUX");
+	bool essentialrxnko = false;
+	string essentialmedia;
+	if (InParameters->labels.size() == 1 && InParameters->labels[0].compare("essentialreactions") == 0) {
+		essentialrxnko = true;
+		essentialmedia = InParameters->mediaConditions[0];
+		InParameters->labels.clear();
+		InParameters->mediaConditions.clear();
+		InParameters->KOSets.clear();
+	}
 	if (GetParameter("find tight bounds").compare("1") == 0) {
 		ObjFunct = NULL;
 		this->FindTightBounds(InData,InParameters,false,true);
@@ -3429,8 +3438,28 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 			}
 		}
 		this->AddObjective(originalObjective);
-		//objectiveConstraint->RightHandSide = -10000;
-		//this->LoadConstToSolver(objectiveConstraint->Index);
+	}
+	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(0.1,GREATER);
+	if (essentialrxnko) {
+		this->LoadSolver();
+		ObjFunct = NULL;
+		this->FindTightBounds(InData,InParameters,false,true);
+		for (int i=0; i < FNumVariables(); i++) {
+			if (GetVariable(i)->AssociatedReaction != NULL && GetVariable(i)->Type == FLUX) {
+				if (essentialrxnko && (GetVariable(i)->Max < -1e-7 || GetVariable(i)->Min > 1e-7)) {
+					if (originalObjective->Variables[0]->AssociatedReaction != GetVariable(i)->AssociatedReaction) {
+						InParameters->labels.push_back(GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING));
+						InParameters->mediaConditions.push_back(essentialmedia);
+						vector<string> reactionlist;
+						cout << "Essential rxn:" << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+						reactionlist.push_back(GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING));
+						InParameters->KOSets.push_back(reactionlist);
+					}
+				}
+			}
+		}
+		objectiveConstraint->RightHandSide = -10000;
+		this->AddObjective(originalObjective);
 	}
 	map<string,bool> koReactions;
 	for (int i=0; i < int(InParameters->labels.size()); i++) {
@@ -3446,7 +3475,6 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		}
 		delete strings;
 	}
-	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(-10000,GREATER);
 	this->LoadSolver();
 	string lastmedia;
 	int rerun = 0;

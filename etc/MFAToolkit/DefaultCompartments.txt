@@ -12,3 +12,6 @@ Index;Abbrevation;Name;I;pH;Max concentration;Min concentration;DeltaPsiCoef;Del
 10;d;plastid;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
 11;w;cell wall;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
 12;b;biomass;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
+13;a;carboxysome;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
+14;t;thylakoid lumen;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
+15;y;thylakoid membrane;0.25;7;0.02;0.00001;0;0;0;CO2:1e-8:0.0014|H2:1e-8:3.4e-5|O2:1e-8:5.5e-5
