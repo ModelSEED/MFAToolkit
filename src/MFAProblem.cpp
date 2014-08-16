@@ -3441,6 +3441,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	}
 	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(0.1,GREATER);
 	if (essentialrxnko) {
+		this->loadMedia(InParameters->mediaConditions[0],InData,true);
 		this->LoadSolver();
 		ObjFunct = NULL;
 		this->FindTightBounds(InData,InParameters,false,true);
