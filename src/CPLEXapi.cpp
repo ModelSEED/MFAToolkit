@@ -203,6 +203,7 @@ OptSolutionData* CPLEXRunSolver(int ProbType) {
 
 		Status = CPXmipopt (CPLEXenv, CPLEXModel);
 	} else if(ProbType == QP) {
+		Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_QP);
 		Status = CPXqpopt (CPLEXenv, CPLEXModel);
 	}
 	if (Status ) {
@@ -474,9 +475,11 @@ int CPLEXAddConstraint(LinEquation* InEquation) {
 		
 		if (InEquation->QuadOne.size() > 0) {
 			if (CPXgetprobtype(CPLEXenv, CPLEXModel) == CPXPROB_LP) {
+				cout << "QP!" << endl;
 				Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_QP);
 			}
 			else if (CPXgetprobtype(CPLEXenv, CPLEXModel) == CPXPROB_MILP) {
+				cout << "MIQP!" << endl;
 				Status = CPXchgprobtype(CPLEXenv, CPLEXModel, CPXPROB_MIQP);
 			}
 	
