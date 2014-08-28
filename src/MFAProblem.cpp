@@ -6251,9 +6251,20 @@ int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InP
 int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParameters,bool fastgapfill) {
 	double start = double(time(NULL));
 	//Loading list of inactive reactions in model
+	vector<float> InitialInactiveCoefficients;
 	vector<string> InitialInactiveReactions = ReadStringsFromFile(FOutputFilepath()+"InactiveModelReactions.txt",false);
 	map<string,Reaction*,std::less<string> > InitialInactiveVar;
 	for (int i=0; i < int(InitialInactiveReactions.size()); i++) {
+		vector<string>* strings = StringToStrings(InitialInactiveReactions[i],"\t");
+		if (strings->size() >= 1) {
+			InitialInactiveReactions[i] = (*strings)[0];
+		}
+		if (strings->size() >= 2) {
+			InitialInactiveCoefficients.push_back(atof((*strings)[1].data()));
+		} else {
+			InitialInactiveCoefficients.push_back(1);
+		}
+		delete strings;
 		Reaction* tempRxn = InData->FindReaction("DATABASE",InitialInactiveReactions[i].data());
 		if (tempRxn != NULL) {
 			InitialInactiveVar[InitialInactiveReactions[i]] = tempRxn;
@@ -6301,6 +6312,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 		simultaneous = true;
 	}
 	map<string,MFAVariable*,std::less<string> > InactiveSlackVar;
+	map<string,double> InactiveVarCoef;
 	for (int i=0; i < int(InitialInactiveReactions.size()); i++) {
 		if (InitialInactiveReactions[i].length() > 0) {
 			constraint->Variables.clear();
@@ -6363,6 +6375,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			} else {
 				Repaired.push_back(-1);
 				InactiveReactions.push_back(InitialInactiveReactions[i]);
+				InactiveVarCoef[InitialInactiveReactions[i]] = InitialInactiveCoefficients[i];
 			}
 		}
 	}
@@ -6417,6 +6430,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			}
 			if (InactiveReactions[i].substr(0,3).compare("bio") != 0) {
 				MFAVariable* NewVariable = InitializeMFAVariable();
+				NewVariable->Type = REACTION_SLACK;
 				this->AddVariable(NewVariable);
 				NewVariable->Name = InactiveReactions[i]+" slack";
 				NewVariable->AssociatedReaction = tempRxn;
@@ -6472,9 +6486,10 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 
 
 	} else if (simultaneous) {
+		double activationCoef = atof(GetParameter("Reaction activation bonus").data());
 		for (map<string,MFAVariable*,std::less<string> >::iterator mapIT = InactiveSlackVar.begin(); mapIT != InactiveSlackVar.end(); mapIT++) {
 			oldObjective->Variables.push_back(mapIT->second);
-			oldObjective->Coefficient.push_back(0.01);
+			oldObjective->Coefficient.push_back(InactiveVarCoef[mapIT->first]*activationCoef);
 		}
 		bool stay_in_loop = true;
 		vector<string>* SolutionArray = new vector<string>;
@@ -6504,7 +6519,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 								}
 								gapfilled.append(sign);
 								gapfilled.append(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
-							} else if (solution->SolutionData[oldObjective->Variables[j]->Index] <= MFA_ZERO_TOLERANCE && InactiveSlackVar.count(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING)) > 0) {
+							} else if (oldObjective->Variables[j]->Type == REACTION_SLACK && solution->SolutionData[oldObjective->Variables[j]->Index] <= MFA_ZERO_TOLERANCE && InactiveSlackVar.count(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING)) > 0) {
 								oldObjective->Coefficient[j] = 0;
 								cost = cost + oldObjective->Coefficient[j];
 								count++;
@@ -7091,27 +7106,6 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 				VariableCoefficients[TempVariable] = 10;
 				ThermoPenalties[TempVariable] = 10;
 				DatabasePenalties[TempVariable] = 0;
-			}
-		}
-	}
-	//Adding coefficients to force on inactive reaction
-	double inactiveCoefficient = atof(GetParameter("Reaction activation bonus").data());
-	if (inactiveCoefficient != 0) {
-		for (map<string,Reaction*,std::less<string> >::iterator mapIT = InactiveVar.begin(); mapIT != InactiveVar.end(); mapIT++) {
-			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == FORWARD) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(univar);
-				if (currVar == NULL) {
-					currVar = mapIT->second->GetMFAVar(forvar);
-				}
-				if (currVar != NULL) {
-					VariableCoefficients[currVar] = -inactiveCoefficient;
-				}
-			}
-			if (mapIT->second->FType() == REVERSIBLE || mapIT->second->FType() == REVERSE) {
-				MFAVariable* currVar = mapIT->second->GetMFAVar(revvar);
-				if (currVar != NULL) {
-					VariableCoefficients[currVar] = -inactiveCoefficient;
-				}
 			}
 		}
 	}

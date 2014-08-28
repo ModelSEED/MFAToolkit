@@ -163,6 +163,7 @@
 #define LARGE_DELTAG_ERROR_USE 30
 #define GENE_UNUSE 31
 #define REACTION_CONSTRAINT 32
+#define REACTION_SLACK 33
 
 //Logic types
 #define AND 0
