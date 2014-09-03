@@ -6501,7 +6501,10 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			this->ResetSolver();
 			this->LoadSolver();
 			GlobalWriteLPFile(Solver);
-			OptSolutionData* solution = RunSolver(false,false,false);
+			OptSolutionData* solution = RunSolver(true,false,false);
+			if (currentround == 0) {
+				PrintSolutions(-1,-1,false);
+			}
 			double cost = 0;
 			if (solution->Status == SUCCESS && solution->Objective > MFA_ZERO_TOLERANCE) {
 				for (int j=0; j < int(oldObjective->Variables.size()); j++) {
@@ -6511,7 +6514,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 							if (oldObjective->Variables[j]->Type == REVERSE_FLUX) {
 								sign = "-";
 							}
-							if (solution->SolutionData[oldObjective->Variables[j]->Index] > MFA_ZERO_TOLERANCE && InactiveSlackVar.count(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING)) == 0) {
+							if (solution->SolutionData[oldObjective->Variables[j]->Index] > MFA_ZERO_TOLERANCE && oldObjective->Variables[j]->Type != REACTION_SLACK) {
 								oldObjective->Coefficient[j] = 0;
 								cost = cost + oldObjective->Coefficient[j];
 								if (gapfilled.length() > 0) {
@@ -6519,7 +6522,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 								}
 								gapfilled.append(sign);
 								gapfilled.append(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
-							} else if (oldObjective->Variables[j]->Type == REACTION_SLACK && solution->SolutionData[oldObjective->Variables[j]->Index] <= MFA_ZERO_TOLERANCE && InactiveSlackVar.count(oldObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING)) > 0) {
+							} else if (oldObjective->Variables[j]->Type == REACTION_SLACK && solution->SolutionData[oldObjective->Variables[j]->Index] <= MFA_ZERO_TOLERANCE) {
 								oldObjective->Coefficient[j] = 0;
 								cost = cost + oldObjective->Coefficient[j];
 								count++;
