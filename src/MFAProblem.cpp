@@ -6287,7 +6287,9 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	//Setting up initial problem to identify unfixable reactions
 	InParameters->ReactionsUse = false;
 	InParameters->AllReactionsUse = false;
-	InParameters->AllReversible = true;
+	if (GetParameter("Make all reactions reversible in MFA").compare("1") == 0) {
+		InParameters->AllReversible = true;
+	}
 	InParameters->DecomposeReversible = false;
 	if (BuildMFAProblem(InData,InParameters) != SUCCESS) {
 		FErrorFile() << "Failed to build optimization problem." << endl;
@@ -6390,7 +6392,9 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 		InParameters->ReactionsUse = true;
 		InParameters->AllReactionsUse = true;
 	}
-	InParameters->AllReversible = true;
+	if (GetParameter("Make all reactions reversible in MFA").compare("1") == 0) {
+		InParameters->AllReversible = true;
+	}
 	InParameters->DecomposeReversible = true;
 	double minimumFlux = atof(GetParameter("Minimum flux for use variable positive constraint").data());
 	//Building the problem from the model
