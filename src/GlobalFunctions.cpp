@@ -230,6 +230,7 @@ void InitializeInternalReferences() {
 	InternalReferenceConversion["RXN_LOAD"] = RXN_LOAD;
 	InternalReferenceConversion["RXN_DIRECTION"] = RXN_DIRECTION;
 	InternalReferenceConversion["RXN_COMPARTMENT"] = RXN_COMPARTMENT;
+	InternalReferenceConversion["RXN_COMPLEXES"] = RXN_COMPLEXES;
 
 	InternalReferenceConversion["GENE_DBLINK"] = GENE_DBLINK;
 	InternalReferenceConversion["GENE_COORD"] = GENE_COORD;
@@ -1165,12 +1166,14 @@ FileBounds* ReadBounds(string mediaName) {
 	vector<string>* mins = mediaObj->getAll("MIN");
 	vector<string>* maxes = mediaObj->getAll("MAX");
 	vector<string>* comps = mediaObj->getAll("COMPARTMENTS");
+	vector<string>* conc = mediaObj->getAll("CONCENTRATIONS");
 	for (int i=0; i < int(vars->size()); i++) {
 		if ((*vars)[i].length() > 0) {
 			InputBounds->VarName.push_back((*vars)[i]);
 			InputBounds->VarCompartment.push_back((*comps)[i]);
 			InputBounds->VarMax.push_back(atof((*maxes)[i].data()));
 			InputBounds->VarMin.push_back(atof((*mins)[i].data()));
+			InputBounds->VarConc.push_back(atof((*conc)[i].data()));
 			InputBounds->VarType.push_back(ConvertVariableType((*types)[i]));
 		}
 	}

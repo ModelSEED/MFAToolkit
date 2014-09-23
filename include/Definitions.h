@@ -164,6 +164,8 @@
 #define GENE_UNUSE 31
 #define REACTION_CONSTRAINT 32
 #define REACTION_SLACK 33
+#define SUBUNIT_EXP 34
+#define COMPLEX_EXP 35
 
 //Logic types
 #define AND 0
@@ -199,5 +201,12 @@
 #define CPLEX 2
 #define LINDO 3
 #define SOLVER_SCIP 1
+
+//Stimuli types
+#define STM_COMPOUND_MEDIACONC 1
+#define STM_COMPOUND_INTRACELLULAR_FLUX 2
+#define STM_COMPOUND_TRANSPORT_FLUX 3
+#define STM_SIGNAL 4
+#define STIM_TF 7
 
 #endif

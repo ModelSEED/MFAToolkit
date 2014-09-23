@@ -26,8 +26,21 @@ Gene::Gene(string InFilename, Data* InData) {
 	if (InFilename.length() > 0) {
 		AddData("DATABASE",InFilename.data(),STRING);
 		AddData("FILENAME",InFilename.data(),STRING);
-		if (GetParameter("Load genes").compare("1") == 0) {
-			LoadGene(InFilename);
+		if (MainData != NULL && MainData->GetData("DATABASE",STRING).length() > 0 && GetData("DATABASE",STRING).length() > 0) {
+			AddData(MainData->GetData("DATABASE",STRING).data(),GetData("DATABASE",STRING).data(),DATABASE_LINK);
+		}
+		StringDBObject* geneObj = GetStringDB()->get_object("gene",GetStringDB()->get_table("gene")->get_id_column(),InFilename);
+		if (geneObj != NULL) {
+			for (int i=0; i < geneObj->get_table()->number_of_attributes();i++) {
+				string attribute = geneObj->get_table()->get_attribute(i);
+				vector<string>* data = geneObj->getAll(i);
+				if (data != NULL && data->size() > 0) {
+					AddData("INPUT_HEADER",attribute.data(),STRING);
+					for (int j=0; j < int(data->size()); j++) {
+						Interpreter(attribute,(*data)[j],true);
+					}
+				}
+			}
 		}
 	}
 
@@ -222,6 +235,82 @@ int Gene::Interpreter(string DataName, string& DataItem, bool Input) {
 				DataItem = Query(DataName);
 			}
 			break;
+		} case GENE_TFS: {
+			if (Input) {
+				vector<string>* Strings = StringToStrings(DataItem,":");
+				if (Strings->size() >= 3) {
+					Stimuli* new_stimuli = new Stimuli;
+					new_stimuli->TF = NULL;
+					new_stimuli->compound = NULL;
+					new_stimuli->type = STIM_TF;
+					new_stimuli->coeficient = atof((*Strings)[2].data());
+					new_stimuli->name.assign((*Strings)[0]);
+					new_stimuli->is_inhibitor = false;
+					if ((*Strings)[1].compare("-1") == 0) {
+						new_stimuli->is_inhibitor = true;
+					}
+					new_stimuli->TF = this->MainData->FindGene("DATABASE",(*Strings)[0].data());
+					if (new_stimuli->TF == NULL) {
+
+					}
+					this->stimuli.push_back(new_stimuli);
+				}
+			} else {
+				DataItem = Query(DataName);
+			}
+			break;
+		} case GENE_STIMULI: {
+			if (Input) {
+				vector<string>* Strings = StringToStrings(DataItem,":");
+				if (Strings->size() >= 3) {
+					Stimuli* new_stimuli = new Stimuli;
+					new_stimuli->TF = NULL;
+					new_stimuli->compound = NULL;
+					new_stimuli->type = STM_SIGNAL;
+					new_stimuli->coeficient = atof((*Strings)[2].data());
+					new_stimuli->name.assign((*Strings)[0]);
+					new_stimuli->is_inhibitor = false;
+					if ((*Strings)[1].compare("-1") == 0) {
+						new_stimuli->is_inhibitor = true;
+					}
+					this->stimuli.push_back(new_stimuli);
+				}
+			} else {
+				DataItem = Query(DataName);
+			}
+			break;
+		} case GENE_COMPOUNDS: {
+			if (Input) {
+				vector<string>* Strings = StringToStrings(DataItem,":");
+				if (Strings->size() >= 5) {
+					for (int i=2; i < 5; i++) {
+						double coef = atof((*Strings)[2].data());
+						if (coef > 0) {
+							Stimuli* new_stimuli = new Stimuli;
+							new_stimuli->TF = NULL;
+							new_stimuli->compound = this->MainData->FindSpecies("DATABASE",(*Strings)[0].data());
+							if (i == 2) {
+								new_stimuli->type = STM_COMPOUND_MEDIACONC;
+							} else if (i == 3) {
+								new_stimuli->type = STM_COMPOUND_INTRACELLULAR_FLUX;
+							} else if (i == 4) {
+								new_stimuli->type = STM_COMPOUND_TRANSPORT_FLUX;
+							}
+							new_stimuli->coeficient = atof((*Strings)[i].data());
+							new_stimuli->name.assign((*Strings)[0]);
+							new_stimuli->name.append(itoa(i));
+							new_stimuli->is_inhibitor = false;
+							if ((*Strings)[1].compare("-1") == 0) {
+								new_stimuli->is_inhibitor = true;
+							}
+							this->stimuli.push_back(new_stimuli);
+						}
+					}
+				}
+			} else {
+				DataItem = Query(DataName);
+			}
+			break;
 		} case GENE_LOAD: {
 			if (Input) {
 				LoadGene(DataItem);			
@@ -395,4 +484,83 @@ LinEquation* Gene::CreateIntervalDeletionConstraint() {
 	}
 
 	return NewConstraint;
+}
+
+void Gene::CreateRegulatoryModelGeneConstraint(MFAProblem* Problem) {
+	if (stimuli.size() > 0) {
+		LinEquation* stimconstraint = InitializeLinEquation("Stimuli constraint",-0.5,GREATER);
+		stimconstraint->Variables.push_back(this->GetMFAVar());
+		stimconstraint->Coefficient.push_back(-1);
+		for (int i=0; i < int(stimuli.size()); i++) {
+			if (stimuli[i]->TF != NULL) {
+				stimconstraint->Variables.push_back(stimuli[i]->TF->GetMFAVar());
+				if (stimuli[i]->is_inhibitor) {
+					stimconstraint->Coefficient.push_back(-1*stimuli[i]->coeficient);
+				} else {
+					stimconstraint->Coefficient.push_back(stimuli[i]->coeficient);
+				}
+			} else if (stimuli[i]->compound != NULL) {
+				if (stimuli[i]->type == STM_COMPOUND_MEDIACONC) {
+					if (stimuli[i]->is_inhibitor) {
+						stimconstraint->RightHandSide += stimuli[i]->coeficient*stimuli[i]->compound->media_concentration();
+					} else {
+						stimconstraint->RightHandSide += -1*stimuli[i]->coeficient*stimuli[i]->compound->media_concentration();
+					}
+				} else if (stimuli[i]->type == STM_COMPOUND_INTRACELLULAR_FLUX || stimuli[i]->type == STM_COMPOUND_TRANSPORT_FLUX) {
+					double coef = stimuli[i]->coeficient;
+					if (stimuli[i]->is_inhibitor) {
+						coef = -1*coef;
+					}
+					list<Reaction*> reactions = stimuli[i]->compound->GetReactionList();
+					for (list<Reaction*>::iterator ListIT=reactions.begin(); ListIT != reactions.end(); ListIT++) {
+						if ((*ListIT)->SpeciesCancels(stimuli[i]->compound)) {
+							if(stimuli[i]->type == STM_COMPOUND_TRANSPORT_FLUX) {
+								MFAVariable* flux = (*ListIT)->GetMFAVar(FLUX);
+								if (flux != NULL) {
+									stimconstraint->Variables.push_back(flux);
+									stimconstraint->Coefficient.push_back(coef);
+								}
+								flux = (*ListIT)->GetMFAVar(FORWARD_FLUX);
+								if (flux != NULL) {
+									stimconstraint->Variables.push_back(flux);
+									stimconstraint->Coefficient.push_back(coef);
+								}
+								flux = (*ListIT)->GetMFAVar(REVERSE_FLUX);
+								if (flux != NULL) {
+									stimconstraint->Variables.push_back(flux);
+									stimconstraint->Coefficient.push_back(coef);
+								}
+							}
+						} else if (stimuli[i]->type == STM_COMPOUND_INTRACELLULAR_FLUX) {
+							MFAVariable* flux = (*ListIT)->GetMFAVar(FLUX);
+							if (flux != NULL) {
+								stimconstraint->Variables.push_back(flux);
+								stimconstraint->Coefficient.push_back(coef);
+							}
+							flux = (*ListIT)->GetMFAVar(FORWARD_FLUX);
+							if (flux != NULL) {
+								stimconstraint->Variables.push_back(flux);
+								stimconstraint->Coefficient.push_back(coef);
+							}
+							flux = (*ListIT)->GetMFAVar(REVERSE_FLUX);
+							if (flux != NULL) {
+								stimconstraint->Variables.push_back(flux);
+								stimconstraint->Coefficient.push_back(coef);
+							}
+						}
+					}
+				}
+			} else {
+				string name = "Stimuli:";
+				name.append(stimuli[i]->name);
+				if (GetParameter(name.data()).length() > 0) {
+					if (stimuli[i]->is_inhibitor) {
+						stimconstraint->RightHandSide += stimuli[i]->coeficient*atof(GetParameter(name.data()).data());
+					} else {
+						stimconstraint->RightHandSide += -1*stimuli[i]->coeficient*atof(GetParameter(name.data()).data());
+					}
+				}
+			}
+		}
+	}
 }

@@ -25,6 +25,7 @@
 
 class Reaction;
 class Data;
+struct Stimuli;
 
 #define GENE_DBLINK 0
 #define GENE_COORD 2
@@ -35,6 +36,9 @@ class Data;
 #define GENE_STRING 7
 #define GENE_QUERY 8
 #define GENE_LOAD 9
+#define GENE_TFS 10
+#define GENE_STIMULI 11
+#define GENE_COMPOUNDS 12
 
 class Gene : public Identity{
 private:
@@ -49,6 +53,8 @@ private:
 
 	Gene* Next;
 	Gene* Previous;
+
+	vector<Stimuli*> stimuli;
 public:
 	Gene(string InFilename, Data* InData);
 	~Gene();
@@ -81,6 +87,16 @@ public:
 	MFAVariable* GetMFAVar();
 	void ClearMFAVariables(bool DeleteThem);
 	LinEquation* CreateIntervalDeletionConstraint();
+	void CreateRegulatoryModelGeneConstraint(MFAProblem* InProblem);
+};
+
+struct Stimuli {
+	string name;
+	Gene* TF;
+	Species* compound;
+	int type;
+	bool is_inhibitor;
+	double coeficient;
 };
 
 #endif

@@ -643,6 +643,24 @@ void Reaction::SetReactantCompartment(int reactant,int compartment) {
 	}
 }
 
+void Reaction::SetComplexes(string InComplexes) {
+	vector<vector<vector<Gene*> > > gprdata;
+	vector<string>* complexes = StringToStrings(InComplexes,"&");
+	for (int i=0; i < complexes->size(); i++) {
+		vector<vector<Gene*> > complex_genes;
+		gprdata.push_back(complex_genes);
+		vector<string>* subunits = StringToStrings((*complexes)[i].data(),"+");
+		for (int j=0; j < subunits->size(); j++) {
+			vector<Gene*> genes;
+			complex_genes.push_back(genes);
+			vector<string>* features = StringToStrings((*subunits)[j],"=");
+			for (int k=0; k < features->size(); k++) {
+				genes.push_back(this->FMainData()->FindGene("DATABASE",(*features)[k].data()));
+			}
+		}
+	}
+}
+
 //Output functions
 int Reaction::FType() {
 	return Type;	
@@ -1744,6 +1762,10 @@ bool Reaction::IsBiomassReaction() {
 	return false;
 }
 
+string Reaction::FComplexes() {
+	return "";
+}
+
 //File Input
 //This function uses the data item headings listed in the input files to determine where the data in those files should be added 
 int Reaction::Interpreter(string DataName, string& DataItem, bool Input) {
@@ -1818,6 +1840,13 @@ int Reaction::Interpreter(string DataName, string& DataItem, bool Input) {
 				SetCode(DataItem);
 			} else {
 				DataItem = FCode();
+			}
+			break;
+		}  case RXN_COMPLEXES: {
+			if (Input) {
+				SetComplexes(DataItem);
+			} else {
+				DataItem = FComplexes();
 			}
 			break;
 		}  case RXN_ERRORMSG: {
@@ -3403,6 +3432,72 @@ string Reaction::FluxClass() {
 		return "NV";
 	} else {
 		return "B";
+	}
+}
+
+void Reaction::CreateRegulatoryModelReactionConstraint(MFAProblem* Problem,double coef) {
+	LinEquation* fluxconstraint = InitializeLinEquation("Gene-reaction mapping or lower constraint",0,LESS);
+	MFAVariable* flux = this->GetMFAVar(FLUX);
+	if (flux != NULL) {
+		fluxconstraint->Variables.push_back(flux);
+		fluxconstraint->Coefficient.push_back(-1);
+	}
+	flux = this->GetMFAVar(FORWARD_FLUX);
+	if (flux != NULL) {
+		fluxconstraint->Variables.push_back(flux);
+		fluxconstraint->Coefficient.push_back(-1);
+	}
+	flux = this->GetMFAVar(REVERSE_FLUX);
+	if (flux != NULL) {
+		fluxconstraint->Variables.push_back(flux);
+		fluxconstraint->Coefficient.push_back(-1);
+	}
+	bool found = false;
+	for (int i=0; i < int(gprdata.size()); i++) {
+		if (gprdata[i].size() > 0) {
+			MFAVariable* cpxvar = InitializeMFAVariable();
+			cpxvar->AssociatedReaction = this;
+			cpxvar->UpperBound = 1;
+			cpxvar->LowerBound = 0;
+			cpxvar->Type = COMPLEX_EXP;
+			fluxconstraint->Variables.push_back(cpxvar);
+			fluxconstraint->Coefficient.push_back(coef);
+			for (int j=0; j < int(gprdata[i].size()); j++) {
+				if (gprdata[i][j].size() > 0) {
+					LinEquation* subunitconstraint = InitializeLinEquation("Subunit expression must be lower than sum of associated gene expression",0,GREATER);
+					MFAVariable* suvar = InitializeMFAVariable();
+					suvar->AssociatedReaction = this;
+					suvar->UpperBound = 1;
+					suvar->LowerBound = 0;
+					suvar->Type = SUBUNIT_EXP;
+					subunitconstraint->Variables.push_back(suvar);
+					subunitconstraint->Coefficient.push_back(-1);
+					for (int k=0; k < int(gprdata[i][j].size()); k++) {
+						subunitconstraint->Variables.push_back(gprdata[i][j][k]->GetMFAVar());
+						subunitconstraint->Coefficient.push_back(1);
+						found = true;
+					}
+					if (found) {
+						Problem->AddVariable(suvar);
+						Problem->AddConstraint(subunitconstraint);
+						LinEquation* complexconstraint = InitializeLinEquation("Complex expression must be lower than all subunit expression",0,GREATER);
+						complexconstraint->Variables.push_back(cpxvar);
+						complexconstraint->Coefficient.push_back(-1);
+						complexconstraint->Variables.push_back(suvar);
+						complexconstraint->Coefficient.push_back(1);
+						Problem->AddConstraint(complexconstraint);
+					} else {
+						delete suvar;
+						delete subunitconstraint;
+					}
+				}
+			}
+		}
+	}
+	if (found) {
+		Problem->AddConstraint(fluxconstraint);
+	} else {
+		delete fluxconstraint;
 	}
 }
 

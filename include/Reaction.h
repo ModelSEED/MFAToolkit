@@ -49,6 +49,7 @@ struct GeneLogicNode;
 #define RXN_DIRECTION 13
 #define RXN_COMPARTMENT 14
 #define RXN_QUERY 100
+#define RXN_COMPLEXES 15
 
 class Reaction : public Identity{
 private:
@@ -69,6 +70,7 @@ private:
 
 	//This is where the gene dependancies for the reaction are stored
 	//This first vector hold independant genes while each second vector contains gene components of a complex
+	vector<vector<vector<Gene*> > > gprdata;
 	vector<vector<Gene*> > GeneDependency;
 	map<Gene*, int, std::less<Gene*> > GeneIndecies;
 	vector<GeneLogicNode*> LogicNodes;
@@ -108,6 +110,7 @@ public:
 	int AddGene(Gene* InGene, int ComplexIndex);
 	int ParseGeneString(string InGeneString);
 	void SetReactantCompartment(int reactant,int compartment);
+	void SetComplexes(string InComplexes);
 
 	//Output functions
 	int FType();
@@ -156,6 +159,7 @@ public:
 	bool AllReactantsMarked();
 	int FCompartment();
 	bool IsBiomassReaction();
+	string FComplexes();
 
 	//File input functions
 	int Interpreter(string DataName, string& DataItem, bool Input);
@@ -203,6 +207,7 @@ public:
 	double FFlux(OptSolutionData* InSolution);
 	string FluxClass();
 	vector<LinEquation*> CreateGeneReactionConstraints();
+	void CreateRegulatoryModelReactionConstraint(MFAProblem* Problem,double coef);
 	vector<double> RetrieveData(int VarType,OptSolutionData* InSolution);
 };
 

@@ -59,6 +59,7 @@ Species::Species(int InEntry, int InIndex, Species* InSpecies, bool InCue) {
 }
 
 void Species::SetDefaults() {
+	MediaConcentration = 0;
 	PathwayMark = 0;
 	MolecWeight = FLAG;
 	MainData = NULL;
@@ -412,6 +413,14 @@ int Species::ReadFromFileline(vector<string>* InHeaders, string Fileline) {
 }
 
 //Output
+
+double Species::media_concentration(double inconc) {
+	if (inconc == -1) {
+		this->MediaConcentration = inconc;
+	}
+	return this->MediaConcentration;
+}
+
 double Species::FEstDeltaG() {
 	return EstDeltaG;
 };

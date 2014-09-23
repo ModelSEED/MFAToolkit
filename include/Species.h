@@ -85,6 +85,7 @@ private:
 	bool Coa;
 	bool Cue;
 	bool SmallMolec;
+	double MediaConcentration;
 
 	vector<Species*> StructuralCues;
 	vector<int> NumStructuralCues;
@@ -130,6 +131,7 @@ public:
 	int ReadFromFileline(vector<string>* InHeaders, string Fileline);
 
 	//Output
+	double media_concentration(double inconc = -1);
 	double FEstDeltaG();
 	double FEstDeltaGUncertainty();
 	double FMolarWeight();

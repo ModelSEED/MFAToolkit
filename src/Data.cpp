@@ -59,7 +59,6 @@ int Data::LoadSystem(string Filename, bool StructCues) {
 	SetData("FILENAME",RemovePath(Filename).data(),STRING);
 	
 	cout << "Loading System: "<<Filename<<endl;
-
 	//Checking if the filename specified is Complete indicating the complete database should be loaded
 	if (Filename.compare("Complete") == 0) {
 		vector<string> ReactionList;
@@ -137,7 +136,12 @@ int Data::LoadSystem(string Filename, bool StructCues) {
 		bool CalcProperties = GetParameter("calculate properties from groups").compare("1") == 0;
 		bool CalcFormula = GetParameter("determine formula from structure file").compare("1") == 0;
 
-		vector<string>* Headers = NULL; 
+		vector<string>* Headers = NULL;
+		string genelist = GetParameter("gene list");
+		vector<string>* genes = StringToStrings(GetParameter("gene list"),";");
+		for (int i=0; i < genes->size(); i++) {
+			this->AddGene((*genes)[i]);
+		}
 		do {
 			string Fileline = GetFileLine(Input);
 			if (Fileline.length() > 0) {

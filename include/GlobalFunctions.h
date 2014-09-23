@@ -272,6 +272,7 @@ struct FileBounds {
 	vector<string> VarCompartment;
 	vector<double> VarMin;
 	vector<double> VarMax;
+	vector<double> VarConc;
 };
 
 struct OptimizationParameter {

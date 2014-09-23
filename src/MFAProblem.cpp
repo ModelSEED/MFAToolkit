@@ -1687,6 +1687,7 @@ int MFAProblem::ApplyInputBounds(FileBounds* InBounds, Data* InData, bool ApplyT
 		if (InBounds->VarType[i] == CONC || InBounds->VarType[i] == LOG_CONC || InBounds->VarType[i] == DELTAGF_ERROR || InBounds->VarType[i] == DRAIN_FLUX || InBounds->VarType[i] == FORWARD_DRAIN_FLUX || InBounds->VarType[i] == REVERSE_DRAIN_FLUX) {
 			Species* Temp = InData->FindSpecies("KEGG;PALSSON;MINORG;DATABASE;NAME;ENTRY",InBounds->VarName[i].data());
 			if (Temp != NULL) {
+				Temp->media_concentration(InBounds->VarConc[i]);
 				Temp->UpdateBounds(InBounds->VarType[i],InBounds->VarMin[i],InBounds->VarMax[i],Compartment,ApplyToMinMax);
 			} else {
 				FErrorFile() << "Could not find compound named: " << InBounds->VarName[i] << endl;
@@ -3397,7 +3398,7 @@ int MFAProblem::CheckIndividualMetaboliteProduction(Data* InData, OptimizationPa
 	return FAIL;
 }
 
-int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InParameters) {
+int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InParameters,bool GapfillPhenosim) {
 	SavedBounds* originalBounds = this->saveBounds();
 	//Running expriments
 	vector<string> outputVector;
@@ -3438,8 +3439,9 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 		}
 		this->AddObjective(originalObjective);
 	}
-	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(0.1,GREATER);
+	LinEquation* objectiveConstraint = this->MakeObjectiveConstraint(-10000,GREATER);
 	if (essentialrxnko) {
+		objectiveConstraint->RightHandSide = 0.1;
 		this->loadMedia(InParameters->mediaConditions[0],InData,true);
 		this->LoadSolver();
 		ObjFunct = NULL;
@@ -3479,7 +3481,6 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	string lastmedia;
 	int rerun = 0;
 	map<string,bool> deletedReactions;
-	bool gapfilling_phenosim = false;
 	for (int i=0; i < int(InParameters->labels.size()); i++) {
 		cout << "Now simulating " << i << " of " << InParameters->labels.size() << endl;
 		double WTgrowth = 0;
@@ -3509,10 +3510,38 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 			ObjFunct = NULL;
 			this->AddObjective(originalObjective);
 			LoadObjective();
-			NewSolution = RunSolver(false,true,false);
+			SetParameter("write LP file","1");
+			NewSolution = RunSolver(false,true,true);
 			if (NewSolution != NULL && NewSolution->Status == SUCCESS) {
-				if (gapfilling_phenosim) {
-
+				if (GapfillPhenosim) {
+					cout << "New round:" << NewSolution->Objective << "\t" << GetObjective()->Variables.size() << "\t" << FMax() << endl;
+					if (NewSolution->Objective == 0) {
+						WTgrowth = 0.1;
+						growth = 0;
+					} else {
+						WTgrowth = 0;
+						growth = 0;
+						noGrowth.assign("");
+						for (int j=0; j < int(originalObjective->Variables.size()); j++) {
+							if (originalObjective->Variables[j]->AssociatedReaction != NULL) {
+								if (originalObjective->Coefficient[j] > 0 && (originalObjective->Variables[j]->Type == REVERSE_FLUX || originalObjective->Variables[j]->Type == FLUX || originalObjective->Variables[j]->Type == FORWARD_FLUX)) {
+									string sign = "+";
+									if (originalObjective->Variables[j]->Type == REVERSE_FLUX) {
+										sign = "-";
+									}
+									if (NewSolution->SolutionData[originalObjective->Variables[j]->Index] > MFA_ZERO_TOLERANCE) {
+										growth++;
+										cout << j << "\t" << NewSolution->SolutionData[originalObjective->Variables[j]->Index] << "\t" << originalObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING) << "\t" << growth << endl;
+										if (noGrowth.length() > 0) {
+											noGrowth.append(",");
+										}
+										noGrowth.append(sign);
+										noGrowth.append(originalObjective->Variables[j]->AssociatedReaction->GetData("DATABASE",STRING));
+									}
+								}
+							}
+						}
+					}
 				} else {
 					WTgrowth = NewSolution->Objective;
 					if (WTgrowth < 1e-7) {
@@ -6485,10 +6514,26 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	}
 	this->AddObjective(oldObjective);
 	this->SetMin();
-	bool deletion_experiments = false;
-	if (deletion_experiments) {
-
-
+	if (InParameters->labels.size() > 0) {
+		Reaction* temprxn = InactiveVar[InactiveReactions[0]];
+		LinEquation* newconstraint = InitializeLinEquation(InactiveReactions[0].data(),0.1,GREATER,LINEAR);
+		MFAVariable* currVar = temprxn->GetMFAVar(FLUX);
+		if (currVar != NULL) {
+			newconstraint->Variables.push_back(currVar);
+			newconstraint->Coefficient.push_back(1);
+		}
+		currVar = temprxn->GetMFAVar(FORWARD_FLUX);
+		if (currVar != NULL) {
+			newconstraint->Variables.push_back(currVar);
+			newconstraint->Coefficient.push_back(1);
+		}
+		currVar = temprxn->GetMFAVar(REVERSE_FLUX);
+		if (currVar != NULL) {
+			newconstraint->Variables.push_back(currVar);
+			newconstraint->Coefficient.push_back(1);
+		}
+		AddConstraint(newconstraint);
+		this->RunDeletionExperiments(InData,InParameters,true);
 	} else if (simultaneous) {
 		double activationCoef = atof(GetParameter("Reaction activation bonus").data());
 		for (map<string,MFAVariable*,std::less<string> >::iterator mapIT = InactiveSlackVar.begin(); mapIT != InactiveSlackVar.end(); mapIT++) {
