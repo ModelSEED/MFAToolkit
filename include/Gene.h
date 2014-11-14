@@ -65,6 +65,7 @@ public:
 	void SetPrevious(Gene* InGene);
 	void SetNext(Gene* InGene);
 	void ClearIntervals();
+	void AddStimuli(string name,Gene* TF,Species* compound,int type,bool is_inhibitor,double coeficient,double ProbOnStimOn,double ProbOnStimOff);
 
 	//Output
 	int FNumReactions();
@@ -83,6 +84,7 @@ public:
 	int SaveGene(string InFilename);
 
 	//Metabolic flux analysis functions
+	double ComputePROMActivity();
 	MFAVariable* CreateMFAVariable(OptimizationParameter* InParameters);
 	MFAVariable* GetMFAVar();
 	void ClearMFAVariables(bool DeleteThem);
@@ -97,6 +99,8 @@ struct Stimuli {
 	int type;
 	bool is_inhibitor;
 	double coeficient;
+	double ProbOnStimOn;
+	double ProbOnStimOff;
 };
 
 #endif

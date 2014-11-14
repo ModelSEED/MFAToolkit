@@ -48,6 +48,9 @@ private:
 	vector<OptSolutionData*> Solutions;
 	vector<ProblemState*> ProblemStates;
 	int MFAProblemClockIndex;
+
+	LinEquation* MinFluxConstraint;
+	LinEquation* ObjectiveConstraint;
 public:
 	MFAProblem();
 	~MFAProblem();
@@ -128,13 +131,14 @@ public:
 	void ProcessSolution(OptSolutionData* InSolution);
 	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters, bool SaveSolution, bool UseSpecifiedSearchTypes = false);
 	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters,string Note);
+	int AlternativeSolutionExploration(OptimizationParameter* InParameters,string Filename);
 	int RecursiveMILP(Data* InData,OptimizationParameter*& InParameters, vector<int> VariableTypes,bool PrintSolutions);
 	vector<OptSolutionData*> RecursiveMILP(OptimizationParameter* InParameters, string ProblemNote,bool ForeignOnly,vector<int> VariableTypes,double MinSolution,int ClockIndex,LinEquation* OriginalObjective);
 	int CheckIndividualMetaboliteProduction(Data* InData, OptimizationParameter* InParameters, vector<Species*> Metabolites, vector<int> Compartments, bool FindTightBounds, bool MinimizeForeignReactions, bool MakeAllDrainsSimultaneously, string Note, bool SubProblem);
 	int CheckIndividualMetaboliteProduction(Data* InData, OptimizationParameter* InParameters, string InMetaboliteList, bool DoFindTightBounds, bool MinimizeForeignReactions, string Note, bool SubProblem);
 	int RunDeletionExperiments(Data* InData, OptimizationParameter* InParameters,bool GapfillPhenosim = false);
 	int RunMediaExperiments(Data* InData, OptimizationParameter* InParameters, double WildTypeObjective, bool DoOptimizeSingleObjective, bool DoFindTightBounds, bool MinimizeForeignReactions, bool OptimizeMetaboliteProduction);
-	int DetermineMinimalFeasibleMedia(Data* InData,OptimizationParameter* InParameters);
+	int DetermineMinimalFeasibleMedia(Data* InData,OptimizationParameter* InParameters,bool augment_only = false);
 	int OptimizeSingleObjective(Data* InData, OptimizationParameter* InParameters, string InObjective, bool FindTightBounds, bool MinimizeForeignReactions, double &ObjectiveValue, string Note);
 	int OptimizeSingleObjective(Data* InData, OptimizationParameter* InParameters, bool FindTightBounds, bool MinimizeForeignReactions, double &ObjectiveValue, string Note, bool SubProblem);
 	int CheckPotentialConstraints(Data* InData, OptimizationParameter* InParameters, double &ObjectiveValue, string Note);
@@ -153,7 +157,6 @@ public:
 	int GapGeneration(Data* InData, OptimizationParameter* InParameters);
 	int SolutionReconciliation(Data* InData, OptimizationParameter* InParameters);
 	string MediaSensitivityExperiment(Data* InData, OptimizationParameter* InParameters, vector<MFAVariable*> CurrentKO, vector<MFAVariable*> NonessentialMedia);
-	int FitMicroarrayAssertions(Data* InData);
 	int FitGIMME(Data* InData);
 	int SoftConstraint(Data* InData);
 	int FitGeneActivtyState(Data* InData);
@@ -164,6 +167,13 @@ public:
 	int CalculateFluxSensitivity(Data* InData,vector<MFAVariable*> variables,double objective);
 	double optimizeVariable(MFAVariable* currentVariable,bool maximize);
 	
+	int AddPROMConstraints(Data* InData, OptimizationParameter* InParameters);
+	int LoadAdditionalReactions(Data* InData,OptimizationParameter* InParameters);
+	int BuildCoreProblem(Data* InData,OptimizationParameter*& InParameters);
+	int AddUptakeLimitConstraints();
+	int FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationParameter* InParameters);
+	int QuantitativeModelOptimization(Data* InData, OptimizationParameter* InParameters);
+
 	//FBA extension studies
 	int CombinatorialKO(int maxDeletions,Data* InData, bool reactions);
 

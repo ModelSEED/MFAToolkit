@@ -2861,6 +2861,29 @@ int Reaction::FPathwayLength() {
 }
 
 //Metabolic flux analysis functions
+double Reaction::ComputePROMActivity() {
+	double bestscore = 0;
+	for (int i=0; i < int(gprdata.size()); i++) {
+		double worstscore = 1;
+		for (int j=0; j < int(gprdata[i].size()); j++) {
+			double genescore = 0;
+			for (int k=0; k < int(gprdata[i][j].size()); k++) {
+				double currprom = gprdata[i][j][k]->ComputePROMActivity();
+				if (currprom > genescore) {
+					genescore = currprom;
+				}
+			}
+			if (worstscore > genescore) {
+				worstscore = genescore;
+			}
+		}
+		if (worstscore > bestscore) {
+			bestscore = worstscore;
+		}
+	}
+	return bestscore;
+}
+
 void Reaction::CreateReactionDrainFluxes() {
 	for (int i=0; i < this->FNumReactants(); i++) {
 		MFAVariable* DrainVariable = this->GetReactant(i)->GetMFAVar(DRAIN_FLUX,this->GetReactantCompartment(i));
@@ -2948,86 +2971,54 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 		}
 	}
 	
-	if (InParameters->ThermoConstraints) {
+	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		//Creating the delta G variable
 		NewVariable = InitializeMFAVariable();
 		NewVariable->Name = GetData("DATABASE",STRING);
 		NewVariable->AssociatedReaction = this;
-		NewVariable->Type = DELTAG;
-		MFAVariables[DELTAG] = NewVariable;
-		NewVariable->LowerBound = -MFA_THERMO_CONST;
-		NewVariable->UpperBound = MFA_THERMO_CONST;
-		if (FEstDeltaG() != FLAG && InParameters->DeltaGError) {
-			//Creating the delta G error variable
-			NewVariable = InitializeMFAVariable();
-			NewVariable->Name = GetData("DATABASE",STRING);
-			NewVariable->AssociatedReaction = this;
-			NewVariable->Type = REACTION_DELTAG_ERROR;
-			MFAVariables[REACTION_DELTAG_ERROR] = NewVariable;
-			if (InParameters->MaxError == FLAG) {
-				NewVariable->UpperBound = InParameters->ErrorMult*FEstDeltaGUncertainty();
-				NewVariable->LowerBound = -InParameters->ErrorMult*FEstDeltaGUncertainty();
-			} else {
-				NewVariable->UpperBound = InParameters->MaxError;
-				NewVariable->LowerBound = -InParameters->MaxError;
-			}
-			//Adding use variables for errors if they are to be included
-			if (InParameters->ReactionErrorUseVariables) {
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				NewVariable->Type = REACTION_DELTAG_PERROR;
-				MFAVariables[REACTION_DELTAG_PERROR] = NewVariable;
-				if (InParameters->MaxError == FLAG) {
-					NewVariable->UpperBound = InParameters->ErrorMult*FEstDeltaGUncertainty();
-					NewVariable->LowerBound = 0;
-				} else {
-					NewVariable->UpperBound = InParameters->MaxError;
-					NewVariable->LowerBound = 0;
-				}
+		NewVariable->Type = POSITIVE_DELTAG;
+		MFAVariables[POSITIVE_DELTAG] = NewVariable;
+		NewVariable->LowerBound = -InParameters->MaxDeltaG;
+		NewVariable->UpperBound = InParameters->MaxDeltaG;
 
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				NewVariable->Type = REACTION_DELTAG_NERROR;
-				MFAVariables[REACTION_DELTAG_NERROR] = NewVariable;
-				if (InParameters->MaxError == FLAG) {
-					NewVariable->UpperBound = InParameters->ErrorMult*FEstDeltaGUncertainty();
-					NewVariable->LowerBound = 0;
-				} else {
-					NewVariable->UpperBound = InParameters->MaxError;
-					NewVariable->LowerBound = 0;
-				}
-				
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				NewVariable->Type = SMALL_DELTAG_ERROR_USE;
-				MFAVariables[SMALL_DELTAG_ERROR_USE] = NewVariable;
-				NewVariable->LowerBound = 0;
-				NewVariable->UpperBound = 1;
-				NewVariable->Binary = true;
-				if (InParameters->MaxError != FLAG) {
-					//NewVariable = InitializeMFAVariable();
-					//NewVariable->Name = GetData("DATABASE",STRING);
-					//NewVariable->AssociatedReaction = this;
-					//NewVariable->Type = LARGE_DELTAG_ERROR_USE;
-					//MFAVariables[LARGE_DELTAG_ERROR_USE] = NewVariable;
-					//NewVariable->LowerBound = 0;
-					//NewVariable->UpperBound = 1;
-					//NewVariable->Binary = true;
-				}
-			}
-		}
-		if (FMark()) {
-			NewVariable = InitializeMFAVariable();
-			NewVariable->AssociatedReaction = this;
-			NewVariable->Binary = true;
-			NewVariable->Type = LUMP_USE;
-			MFAVariables[LUMP_USE] = NewVariable;
-			NewVariable->LowerBound = 0;
-			NewVariable->UpperBound = 1;
-		}
+		NewVariable = InitializeMFAVariable();
+		NewVariable->Name = GetData("DATABASE",STRING);
+		NewVariable->AssociatedReaction = this;
+		NewVariable->Type = NEGATIVE_DELTAG;
+		MFAVariables[NEGATIVE_DELTAG] = NewVariable;
+		NewVariable->LowerBound = -InParameters->MaxDeltaG;
+		NewVariable->UpperBound = InParameters->MaxDeltaG;
+
+		NewVariable = InitializeMFAVariable();
+		NewVariable->Name = GetData("DATABASE",STRING);
+		NewVariable->AssociatedReaction = this;
+		NewVariable->Type = FORWARD_REACTION;
+		MFAVariables[FORWARD_REACTION] = NewVariable;
+		NewVariable->LowerBound = 0;
+		NewVariable->UpperBound = 1;
+		NewVariable->Binary = true;
+	}
+
+	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
+		NewVariable = InitializeMFAVariable();
+		NewVariable->Name = GetData("DATABASE",STRING);
+		NewVariable->AssociatedReaction = this;
+		NewVariable->Type = REACTION_SLACK;
+		MFAVariables[REACTION_SLACK] = NewVariable;
+		NewVariable->LowerBound = 0;
+		NewVariable->UpperBound = 1;
+		NewVariable->Binary = InParameters->BinaryReactionSlackVariable;
+	}
+
+	if (InParameters->SingleRxnUse) {
+		NewVariable = InitializeMFAVariable();
+		NewVariable->Name = GetData("DATABASE",STRING);
+		NewVariable->AssociatedReaction = this;
+		NewVariable->Type = REACTION_USE;
+		MFAVariables[REACTION_USE] = NewVariable;
+		NewVariable->LowerBound = 0;
+		NewVariable->UpperBound = 1;
+		NewVariable->Binary = true;
 	}
 
 	if (InParameters->GeneConstraints) {
@@ -3046,6 +3037,102 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 				ComplexMFAVariables.push_back(NULL);
 			}
 		}
+	}
+}
+
+void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem) {
+	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
+		LinEquation* NewConstraint = InitializeLinEquation("Gibbs energy constraint",0,EQUAL);
+		NewConstraint->AssociatedReaction = this;
+		NewConstraint->Coefficient.push_back(-1);
+		NewConstraint->Variables.push_back(this->GetMFAVar(POSITIVE_DELTAG));
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Variables.push_back(this->GetMFAVar(NEGATIVE_DELTAG));
+		for (int j=0; j < this->FNumReactants(); j++) {
+			NewConstraint->Coefficient.push_back(this->GetReactantCoef(j));
+			NewConstraint->Variables.push_back(this->GetReactant(j)->GetMFAVar(POTENTIAL,this->GetReactantCompartment(j)));
+		}
+		InProblem->AddConstraint(NewConstraint);
+		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+		if (fluxvar == NULL) {
+			fluxvar = this->GetMFAVar(FLUX);
+		}
+		if (fluxvar != NULL) {
+			NewConstraint = InitializeLinEquation("Gibbs energy forward flux constraint",0,LESS);
+			NewConstraint->AssociatedReaction = this;
+			NewConstraint->Coefficient.push_back(-100);
+			NewConstraint->Variables.push_back(this->GetMFAVar(NEGATIVE_DELTAG));
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(fluxvar);
+			InProblem->AddConstraint(NewConstraint);
+
+			NewConstraint = InitializeLinEquation("Gibbs energy forward binary constraint",0,LESS);
+			NewConstraint->AssociatedReaction = this;
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(this->GetMFAVar(NEGATIVE_DELTAG));
+			NewConstraint->Coefficient.push_back(-10000);
+			NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+			InProblem->AddConstraint(NewConstraint);
+		}
+		fluxvar = this->GetMFAVar(REVERSE_FLUX);
+		if (fluxvar != NULL) {
+			NewConstraint = InitializeLinEquation("Gibbs energy reverse flux constraint",0,LESS);
+			NewConstraint->AssociatedReaction = this;
+			NewConstraint->Coefficient.push_back(-100);
+			NewConstraint->Variables.push_back(this->GetMFAVar(POSITIVE_DELTAG));
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(fluxvar);
+			InProblem->AddConstraint(NewConstraint);
+
+			NewConstraint = InitializeLinEquation("Gibbs energy reverse binary constraint",10000,LESS);
+			NewConstraint->AssociatedReaction = this;
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(this->GetMFAVar(POSITIVE_DELTAG));
+			NewConstraint->Coefficient.push_back(10000);
+			NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+			InProblem->AddConstraint(NewConstraint);
+		}
+	}
+
+	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
+		LinEquation* NewConstraint = InitializeLinEquation("Reaction slack constraint",1,GREATER);
+		NewConstraint->AssociatedReaction = this;
+		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+		if (fluxvar == NULL) {
+			fluxvar = this->GetMFAVar(FLUX);
+		}
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(1000);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		fluxvar = this->GetMFAVar(REVERSE_FLUX);
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(1000);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Variables.push_back(this->GetMFAVar(REACTION_SLACK));
+		InProblem->AddConstraint(NewConstraint);
+	}
+
+	if (InParameters->SingleRxnUse) {
+		LinEquation* NewConstraint = InitializeLinEquation("Single use variable constraint",0,GREATER);
+		NewConstraint->Coefficient.push_back(1000);
+		NewConstraint->Variables.push_back(REACTION_USE);
+		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+		if (fluxvar == NULL) {
+			fluxvar = this->GetMFAVar(FLUX);
+		}
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(-1);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		fluxvar = this->GetMFAVar(REVERSE_FLUX);
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(-1);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		InProblem->AddConstraint(NewConstraint);
 	}
 }
 

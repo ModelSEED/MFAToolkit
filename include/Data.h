@@ -66,6 +66,7 @@ public:
 	//File input
 	int LoadSystem(string Filename, bool StructCues = false);
 	int LoadStructuralCues();
+	int LoadPROMModel(string Filename);
 
 	//Input
 	Species* AddSpecies(string Filename);
@@ -82,7 +83,7 @@ public:
 	void ClearReactions(int DeleteThem = ALL);
 	void ClearStructuralCues();
 	void ClearGenes(int DeleteThem = ALL);
-	void ResetAllBools(bool NewMark, bool ResetMark, bool NewKill, bool ResetKill, bool ResetReactions, bool ResetSpecies, bool ResetCues);
+	void ResetAllBools(bool NewMark, bool ResetMark, bool NewKill, bool ResetKill, bool ResetReactions, bool ResetSpecies, bool ResetCues, bool ResetGenes = true);
 	void AddCompartment(int InIndex);
 	void RemoveMarkedReactions(bool DeleteThem);
 	void RemoveMarkedSpecies(bool DeleteThem);

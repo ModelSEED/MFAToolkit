@@ -166,6 +166,10 @@
 #define REACTION_SLACK 33
 #define SUBUNIT_EXP 34
 #define COMPLEX_EXP 35
+#define GENE_EXP 36
+#define FORWARD_REACTION 37
+#define POSITIVE_DELTAG 38
+#define NEGATIVE_DELTAG 39
 
 //Logic types
 #define AND 0

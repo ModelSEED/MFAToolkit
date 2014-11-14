@@ -80,6 +80,19 @@ void Gene::ClearIntervals() {
 	IntervalList.clear();
 }
 
+void Gene::AddStimuli(string name,Gene* TF,Species* compound,int type,bool is_inhibitor,double coeficient,double ProbOnStimOn,double ProbOnStimOff) {
+	Stimuli* newstim = new Stimuli;
+	newstim->name = name;
+	newstim->TF = TF;
+	newstim->compound = compound;
+	newstim->type = type;
+	newstim->is_inhibitor = is_inhibitor;
+	newstim->coeficient = coeficient;
+	newstim->ProbOnStimOn = ProbOnStimOn;
+	newstim->ProbOnStimOff = ProbOnStimOff;
+	this->stimuli.push_back(newstim);
+}
+
 //Output
 int Gene::FNumReactions() {
 	return int(ReactionList.size());
@@ -441,6 +454,16 @@ int Gene::SaveGene(string InFilename) {
 }
 
 //Metabolic flux analysis functions
+double Gene::ComputePROMActivity() {
+	double PROMActivity = 1;
+	for (int i=0; i < int(this->stimuli.size()); i++) {
+		if (this->stimuli[i]->TF != NULL && this->stimuli[i]->TF->GetDoubleData("FBAKO") == 1) {
+			PROMActivity = PROMActivity*this->stimuli[i]->ProbOnStimOff;
+		}
+	}
+	return PROMActivity;
+}
+
 MFAVariable* Gene::CreateMFAVariable(OptimizationParameter* InParameters) {
 	GeneUseVariable = InitializeMFAVariable();
 
@@ -449,8 +472,13 @@ MFAVariable* Gene::CreateMFAVariable(OptimizationParameter* InParameters) {
 	if (GetData("ESSENTIAL",STRING).compare("Kobyashi et al.") == 0 || GetData("ESSENTIAL",STRING).compare("Noirot et al.") == 0) {
 		GeneUseVariable->LowerBound = 1;
 	}
-	GeneUseVariable->Binary = true;
-	GeneUseVariable->Type = GENE_USE;
+	if (GetParameter("Continuous regulatory modeling formulation").compare("1") == 0) {
+		GeneUseVariable->Binary = false;
+		GeneUseVariable->Type = GENE_EXP;
+	} else {
+		GeneUseVariable->Binary = true;
+		GeneUseVariable->Type = GENE_USE;
+	}
 	GeneUseVariable->AssociatedGene = this;
 	GeneUseVariable->Name = GetData("DATABASE",STRING);
 

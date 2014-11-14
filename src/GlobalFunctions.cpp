@@ -1234,7 +1234,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->MaxDrainFlux = atof(GetParameter("Default max drain flux").data());
 	NewParameters->MinDrainFlux = atof(GetParameter("Default min drain flux").data());
 	NewParameters->MaxPotential = atof(GetParameter("Max potential").data());
-	NewParameters->MinPotential = atof(GetParameter("Min potential").data());
+	NewParameters->MaxDeltaG = atof(GetParameter("Max deltaG").data());
 	NewParameters->OptimalObjectiveFraction = atof(GetParameter("Constrain objective to this fraction of the optimal value").data());
 	NewParameters->SolutionSizeInterval = atoi(GetParameter("Recursive MILP solution size interval").data());
 	NewParameters->RecursiveMILPSolutionLimit = atoi(GetParameter("Recursive MILP solution limit").data());

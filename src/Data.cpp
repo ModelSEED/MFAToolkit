@@ -240,6 +240,27 @@ int Data::LoadStructuralCues() {
 	return Result;
 }
 
+void Data::LoadPROMModel(string Filename) {
+	vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+Filename,"\t");
+	for (int i=1; i < int(rows->size()); i++) {
+		Gene* CurrentGene = this->FindGene((*rows)[i][0].data(),"DATABASE");
+		if (CurrentGene == NULL) {
+			CurrentGene = this->AddGene((*rows)[i][0]);
+		}
+		vector<string>* TFGeneStrings = StringToStrings((*rows)[i][1], ";");
+		for (int j=0; j < int(TFGeneStrings->size()); j++) {
+			vector<string>* GeneDataStrings = StringToStrings((*TFGeneStrings)[j], ":");
+			if (GeneDataStrings->size() >= 3) {
+				Gene* TFGene = this->FindGene((*GeneDataStrings)[0].data(),"DATABASE");
+				if (TFGene == NULL) {
+					TFGene = this->AddGene((*GeneDataStrings)[0]);
+				}
+				CurrentGene->AddStimuli((*GeneDataStrings)[0].data(),TFGene,NULL,GENE_TFS,false,0,atof((*GeneDataStrings)[1].data()),atof((*GeneDataStrings)[2].data()));
+			}
+		}
+	}
+}
+
 Species* Data::AddSpecies(string Filename) {
 	Species*& Temp = CpdDatabaseLinks["FILENAME"][Filename];
 	if (Temp == NULL) {
@@ -465,7 +486,7 @@ void Data::ClearStructuralCues() {
 	StructuralCues.clear();
 }
 
-void Data::ResetAllBools(bool NewMark, bool ResetMark, bool NewKill, bool ResetKill, bool ResetReactions, bool ResetSpecies, bool ResetCues) {
+void Data::ResetAllBools(bool NewMark, bool ResetMark, bool NewKill, bool ResetKill, bool ResetReactions, bool ResetSpecies, bool ResetCues,bool ResetGenes) {
 	if (ResetSpecies) {
 		for (int i=0; i < FNumSpecies(); i++) {
 			if (ResetMark) {
@@ -483,6 +504,16 @@ void Data::ResetAllBools(bool NewMark, bool ResetMark, bool NewKill, bool ResetK
 			}
 			if (ResetKill) {
 				GetReaction(i)->SetKill(NewKill);
+			}
+		}
+	}
+	if (ResetGenes) {
+		for (int i=0; i < this->FNumGenes(); i++) {
+			if (ResetMark) {
+				this->GetGene(i)->SetMark(NewMark);
+			}
+			if (ResetKill) {
+				this->GetGene(i)->SetKill(NewKill);
 			}
 		}
 	}
@@ -1214,13 +1245,6 @@ void Data::PerformMFA() {
 		return;
 	}
 
-	//Fitting microarray data
-	if (GetParameter("Microarray assertions").length() > 0 && GetParameter("Microarray assertions").compare("NONE") != 0) {
-		NewProblem->FitMicroarrayAssertions(this);
-		delete NewProblem;
-		return;
-	}
-
 	//Fitting gimme data
 	if (GetParameter("Gene Inactivity Moderated by Metabolism and Expression").length() > 0 && GetParameter("Gene Inactivity Moderated by Metabolism and Expression").compare("NONE") != 0) {
 		NewProblem->FitGIMME(this);
@@ -1330,6 +1354,10 @@ void Data::PerformMFA() {
 		string Note;
 		NewParameters->RelaxIntegerVariables = (GetParameter("relax integer variables when possible").compare("1") == 0);
 		NewProblem->OptimizeSingleObjective(this,NewParameters,GetParameter("objective"),GetParameter("find tight bounds").compare("1") == 0,GetParameter("Minimize the number of foreign reactions").compare("1") == 0,ObjectiveValue,Note);	
+	}
+
+	if (GetParameter("new fba pipeline").compare("1") == 0) {
+		NewProblem->FluxBalanceAnalysisMasterPipeline(this,NewParameters);
 	}
 
 	if (GetParameter("run reaction addition experiments").compare("1") == 0) {

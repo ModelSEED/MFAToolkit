@@ -276,6 +276,11 @@ struct FileBounds {
 };
 
 struct OptimizationParameter {
+	bool PROM;
+	bool TranscriptomeAnalysis;
+	bool PhenotypeAnalysis;
+	bool QuantitativeOptimization;
+	bool FluxVariabilityAnalysis;
 	bool DoCalculateSensitivity;
 	bool DetermineMinimalMedia;
 	bool DoMinimizeFlux;
@@ -333,7 +338,7 @@ struct OptimizationParameter {
 	double MaxFlux;
 	double MinFlux;
 	double MaxPotential;
-	double MinPotential;
+	double MaxDeltaG;
 	double MaxDrainFlux;
 	double MinDrainFlux;
 	double MaxError;

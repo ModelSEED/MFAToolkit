@@ -22,6 +22,8 @@
 
 MFAProblem::MFAProblem() {
 	SetParameter("MFA output path",(FOutputFilepath()+GetParameter("MFA output")).data());
+	MinFluxConstraint = NULL;
+	ObjectiveConstraint = NULL;
 	SourceDatabase = NULL;
 	SetSolver(GetParameter("MFASolver").data());
 	Max = true;
@@ -2791,6 +2793,130 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 	return SUCCESS;
 }
 
+int MFAProblem::AlternativeSolutionExploration(OptimizationParameter* InParameters,string Filename) {
+	//At this point we branch out if the user asked for alternative analysis instead of standard recursive MILP
+	int TotalSolutions = 1;
+	bool OriginalSense = FMax();
+	LinEquation* OriginalObj = ObjFunct;
+	//Identifying all variables used in the intial solution
+	vector<MFAVariable*> InitialSolutionVariables;
+	vector<int> InitialVariableIndecies;
+	//Identifying alternatives to each variable in the original solution
+	OptSolutionData* InitialSolution = RunSolver(true,true,true);
+	LinEquation* SolutionVarSumObj = InitializeLinEquation();
+	bool binaryvar = false;
+	vector<bool> objmarks;
+	vector<double> upperbnds;
+	vector<double> lowerbnds;
+	for (int i=0; i < int(ObjFunct->Variables.size()); i++) {
+		objmarks.push_back(false);
+		upperbnds.push_back(ObjFunct->Variables[i]->UpperBound);
+		lowerbnds.push_back(ObjFunct->Variables[i]->LowerBound);
+		double threshold = MFA_ZERO_TOLERANCE;
+		if (ObjFunct->Variables[i]->Binary) {
+			threshold = 0.5;
+			binaryvar = true;
+		}
+		if (InitialSolution->SolutionData[ObjFunct->Variables[i]->Index] > threshold) {
+			InitialSolutionVariables.push_back(ObjFunct->Variables[i]);
+			InitialVariableIndecies.push_back(i);
+			ObjFunct->Variables[i]->Mark = false;
+			objmarks[i] = true;
+		}
+	}
+	vector<vector<vector<string>>> solalts;
+	vector<string> essentials;
+	for (int i=0; i < int(InitialSolutionVariables.size()); i++) {
+		if (!InitialSolutionVariables[i]->Mark) {
+			ObjFunct = CloneLinEquation(OriginalObj);
+			vector<string> group;
+			vector<vector<string>> alternatives;
+			group.push_back(InitialSolutionVariables[i]->Name);
+			//Setting bounds on target variable to zero
+			InitialSolutionVariables[i]->UpperBound = 0;
+			LoadVariable(InitialSolutionVariables[i]->Index);
+			//Setting the lower bound on all other variables to non-zero
+			for (int j=0; j < int(InitialSolutionVariables.size()); j++) {
+				if (j != i) {
+					if (InitialSolutionVariables[j]->binary) {
+						InitialSolutionVariables[j]->LowerBound = 1;
+						LoadVariable(InitialSolutionVariables[j]->Index);
+					} else {
+						ObjFunct->Coefficient[InitialVariableIndecies[j]] = 10000*ObjFunct->Coefficient[InitialVariableIndecies[j]];
+					}
+				}
+			}
+			LoadObjective();
+			OptSolutionData* NewSolution = RunSolver(true,true,true);
+			if (NewSolution->Status != SUCCESS) {
+				essentials.push_back(InitialSolutionVariables[i]->Name);
+			} else {
+				for (int k=0; k < InParameters->NumSolutions; k++) {
+					for (int j=0; j < int(InitialSolutionVariables.size()); j++) {
+						if (j != i) {
+							double threshold = MFA_ZERO_TOLERANCE;
+							if (InitialSolutionVariables[j]->Binary) {
+								threshold = 0.5;
+							}
+							if (NewSolution->SolutionData[InitialSolutionVariables[j]->Index] < threshold) {
+								group.push_back(InitialSolutionVariables[j]->Name);
+								InitialSolutionVariables[j]->Mark = true;
+							}
+						}
+					}
+					vector<string> othersol;
+					for (int j=0; j < int(ObjFunct->Variables.size()); j++) {
+						double threshold = MFA_ZERO_TOLERANCE;
+						if (ObjFunct->Variables[j]->Binary) {
+							threshold = 0.5;
+							binaryvar = true;
+						}
+						if (objmarks[j] && InitialSolution->SolutionData[ObjFunct->Variables[j]->Index] > threshold) {
+							othersol.push_back(ObjFunct->Variables[j]->Name);
+							ObjFunct->Variables[j]->UpperBound = 0;
+						}
+					}
+					alternatives.push_back(othersol);
+					NewSolution = RunSolver(true,true,true);
+					if (NewSolution->Status != SUCCESS) {
+						k = 1000;
+					}
+				}
+			}
+			solalts.push_back(alternatives);
+			for (int j=0; j < int(ObjFunct->Variables.size()); j++) {
+				ObjFunct->Variables[j]->UpperBound = upperbnds[j];
+				ObjFunct->Variables[j]->LowerBound = lowerbnds[j];
+			}
+		}
+	}
+	ofstream output(FOutputFilepath()+Filename);
+	output << "Essentials:";
+	for (int i=0; i < int(essentials.size()); i++) {
+		if (i > 0) {
+			output << "\t";
+		}
+		output << essentials[i];
+	}
+	output << endl;
+	for (int i=0; i < int(solalts.size()); i++) {
+		output << i << ":";
+		for (int j=0; j < int(solalts[i].size()); j++) {
+			if (j > 0) {
+				output << "\t";
+			}
+			for (int k=0; k < int(solalts[i][j].size()); k++) {
+				if (k > 0) {
+					output << ";";
+				}
+				output << solalts[i][j][k];
+			}
+		}
+		output << endl;
+	}
+	output.close();
+}
+
 int MFAProblem::RecursiveMILP(Data* InData, OptimizationParameter*& InParameters, vector<int> VariableTypes,bool PrintSolutions) {	
 	int Status = SUCCESS;
 
@@ -3959,139 +4085,6 @@ int MFAProblem::RunMediaExperiments(Data* InData, OptimizationParameter* InParam
 	return Status;
 }
 
-//This function determines the minimal additions to the media that must be made in order for growth to occur
-int MFAProblem::DetermineMinimalFeasibleMedia(Data* InData,OptimizationParameter* InParameters) {		
-	//Saving the old objective
-	LinEquation* OldObjective = GetObjective();
-	ObjFunct = NULL;
-
-	//Finding the media compounds
-	vector<MFAVariable*> MediaVariables;
-	if (InParameters->ExcludeCurrentMedia) {
-		for (int j=0; j < int(InParameters->UserBounds->VarType.size()); j++) {
-			if (InParameters->UserBounds->VarType[j] == DRAIN_FLUX && InParameters->UserBounds->VarMax[j] > 0 && InParameters->UserBounds->VarCompartment[j].compare("e") == 0) {
-				Species* Temp = InData->FindSpecies("DATABASE;NAME;KEGG;PALSSON;MINORG",InParameters->UserBounds->VarName[j].data());
-				if (Temp != NULL) {
-					MediaVariables.push_back(Temp->GetMFAVar(FORWARD_DRAIN_USE,InParameters->DefaultExchangeComp));				
-				}
-			}
-		}
-	}
-	//Running tight bounds to identify essential nutrients
-	string searchVar = GetParameter("tight bounds search variables");
-	SetParameter("tight bounds search variables","DRAIN_FLUX;FORWARD_DRAIN_FLUX");
-	this->FindTightBounds(InData,InParameters,true,true);
-	SetParameter("tight bounds search variables",searchVar.data());
-	vector<Species*> EssentialNutrients;
-	for (int i=0; i < FNumVariables(); i++) {
-		if (GetVariable(i)->Type == DRAIN_FLUX || GetVariable(i)->Type == FORWARD_DRAIN_FLUX) {
-			if (GetVariable(i)->Min > MFA_ZERO_TOLERANCE) {
-				EssentialNutrients.push_back(GetVariable(i)->AssociatedSpecies);
-			}
-		}
-	}
-
-	//Creating the objective
-	SetMin();
-	LinEquation* NewEquation = InitializeLinEquation("minimal media objective");
-	for (int i=0; i < FNumVariables(); i++) {
-		if (GetVariable(i)->Type == FORWARD_DRAIN_USE || GetVariable(i)->Type == DRAIN_USE) {
-			//This variable indicates whether or not the drain flux will be included in the objective
-			bool IncludeInObjective = true;
-			//Removing the current media drain fluxes from the objective
-			if (InParameters->ExcludeCurrentMedia) {
-				for (int j=0; j < int(MediaVariables.size()); j++) {
-					if (MediaVariables[j] == GetVariable(i)) {
-						IncludeInObjective = false;
-						break;
-					}
-				}
-			}
-			//Adding the drain fluxes to the objective
-			if (IncludeInObjective) {
-				NewEquation->Variables.push_back(GetVariable(i));
-				if (GetVariable(i)->AssociatedSpecies != NULL && !GetVariable(i)->AssociatedSpecies->FExtracellular()) {
-					//Penalizing the use of dead end items in the media
-					NewEquation->Coefficient.push_back(InParameters->DeadEndCoefficient);
-				} else {
-					NewEquation->Coefficient.push_back(1);
-				}
-			}
-		}
-	}
-	AddObjective(NewEquation);
-	this->LoadObjective();
-
-	//Running the recursive MILP
-	vector<int> VariableTypes;
-	VariableTypes.push_back(OBJECTIVE_TERMS);
-	int SolutionIndex = FNumSolutions();
-	RecursiveMILP(InData,InParameters,VariableTypes,false);
-
-	//Outputing all of the relevant data from the recursive MILP solutions in table format
-	ofstream Output;
-	if (!OpenOutput(Output,FOutputFilepath()+"MFAOutput/MinimalMediaResults.txt")) {
-		return FAIL;
-	}
-	Output << "Essential nutrients:" << endl;
-	for (int i=0; i < int(EssentialNutrients.size()); i++) {
-		if (i > 0) {
-			Output << ";";
-		}
-		Output << EssentialNutrients[i]->GetData("DATABASE",STRING);
-	}
-	Output << endl << "Non essential nutrient sets:" << endl;
-	for (int i=SolutionIndex; i < FNumSolutions(); i++) {
-		bool first = true;
-		for (int j=0; j < int(NewEquation->Variables.size()); j++) {
-			if (NewEquation->Variables[j]->AssociatedSpecies != NULL && GetSolution(i)->SolutionData[NewEquation->Variables[j]->Index] > 0.5 && NewEquation->Variables[j]->AssociatedSpecies->FExtracellular()) {
-				bool match = false;
-				for (int k=0; k < int(EssentialNutrients.size()); k++) {
-					if (EssentialNutrients[k] == NewEquation->Variables[j]->AssociatedSpecies) {
-						match = true;
-						break;
-					}
-				}
-				if (!match) {
-					if (!first) {
-						Output << ";";
-					}
-					first = false;
-					Output << NewEquation->Variables[j]->AssociatedSpecies->GetData("DATABASE",STRING);
-				}
-			}
-		}
-		Output << endl;
-	}
-	Output << "Dead end compound sets:" << endl;
-	for (int i=SolutionIndex; i < FNumSolutions(); i++) {
-		bool first = true;
-		for (int j=0; j < int(NewEquation->Variables.size()); j++) {
-			if (NewEquation->Variables[j]->AssociatedSpecies != NULL && GetSolution(i)->SolutionData[NewEquation->Variables[j]->Index] > 0.5 && !NewEquation->Variables[j]->AssociatedSpecies->FExtracellular()) {
-				bool match = false;
-				for (int k=0; k < int(EssentialNutrients.size()); k++) {
-					if (EssentialNutrients[k] == NewEquation->Variables[j]->AssociatedSpecies) {
-						match = true;
-						break;
-					}
-				}
-				if (!match) {
-					if (!first) {
-						Output << ";";
-					}
-					first = false;
-					Output << NewEquation->Variables[j]->AssociatedSpecies->GetData("DATABASE",STRING);
-				}
-			}
-		}
-		Output << endl;
-	}
-	Output.close();
-	AddObjective(OldObjective);
-
-	return SUCCESS;
-}
-
 //This function loads the objective from the input string
 int MFAProblem::OptimizeSingleObjective(Data* InData, OptimizationParameter* InParameters, string InObjective, bool FindTightBounds, bool MinimizeForeignReactions, double &ObjectiveValue, string Note) {
 	//Reading in objective from parameters file
@@ -4114,7 +4107,308 @@ int MFAProblem::OptimizeSingleObjective(Data* InData, OptimizationParameter* InP
 	PrintProblemReport(FLAG,InParameters,Note);
 	return FAIL;
 }	
-	
+
+int MFAProblem::LoadAdditionalReactions(Data* InData,OptimizationParameter* InParameters) {
+	if (InData->GetData("Reaction list loaded",STRING).length() == 0) {
+		InData->AddData("Reaction list loaded","YES",STRING);
+		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"AdditionalReactions.txt","\t");
+		for (int i=1; i < int(rows->size()); i++) {
+			if (InData->FindReaction("DATABASE",(*rows)[i][0].data()) == NULL) {
+				Reaction* NewReaction = new Reaction((*rows)[i][0].data(),InData);
+				NewReaction->AddData("FOREIGN",(*rows)[i][1].data(),STRING);
+				NewReaction->AddData("FOREIGNCOEF",atof((*rows)[i][2].data()));
+				InData->AddReaction(NewReaction);
+			}
+		}
+	}
+	return SUCCESS;
+}
+
+int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParameters) {
+	this->LoadAdditionalReactions(InData,InParameters);
+	if (InParameters == NULL) {
+		InParameters = ReadParameters();
+	}
+	InData->ResetAllBools(false,true,false,true,true,true,true,true);
+	//Adding all variables except the use variables
+	for (int i=0; i < InData->FNumReactions(); i++) {
+		InData->GetReaction(i)->CreateMFAVariables(InParameters);
+	}
+	for (int i=0; i < InData->FNumSpecies(); i++) {
+		InData->GetSpecies(i)->CreateMFAVariables(InParameters);
+	}
+	ApplyInputBounds(InParameters->UserBounds,InData);
+	//Enforcing the specified KO reactions
+	for (int i=0; i < int(InParameters->KOReactions.size()); i++) {
+		Reaction* Temp = InData->FindReaction("DATABASE",InParameters->KOReactions[i].data());
+		if (Temp != NULL) {
+			Temp->UpdateBounds(FLUX,0,0);
+		}
+	}
+	for (int i=0; i < int(InParameters->KOGenes.size()); i++) {
+		Gene* Temp = InData->FindGene("DATABASE",InParameters->KOGenes[i].data());
+		if (Temp != NULL) {
+			Temp->SetData("FBAKO",1);
+			Temp->SetMark(true);
+		}
+	}
+	for (int j=0; j < InData->FNumReactions(); j++) {
+		if (InData->GetReaction(j)->CheckForKO()) {
+			InData->GetReaction(j)->UpdateBounds(FLUX,0,0);
+		}
+	}
+	if (InParameters->ThermoConstraints && !InParameters->SimpleThermoConstraints) {
+		for (int i=0; i < InData->FNumStructuralCues(); i++) {
+			if (InData->GetStructuralCue(i)->FEstDeltaG() == -10000) {
+				AddVariable(InData->GetStructuralCue(i)->CreateMFAVariable(DELTAGG_ENERGY,-1,-1000,1000));
+			}
+		}
+	}
+	for (int i=0; i < InData->FNumReactions(); i++) {
+		InData->GetReaction(i)->GetAllMFAVariables(Variables);
+		InData->GetReaction(i)->BuildReactionConstraints(InParameters,this);
+	}
+	//Now that all of the necessary variables exist, I can read in and add the special constraints
+	ApplyInputConstraints(InParameters->AddConstraints,InData);
+	//Now I add mass balance constraints
+	if (InParameters->MassBalanceConstraints) {
+		AddMassBalanceConstraints(InData);
+	}
+	AddUptakeLimitConstraints();
+}
+
+int MFAProblem::AddUptakeLimitConstraints() {
+	//Adding atom uptake constraints
+	if (GetParameter("uptake limits").compare("none") != 0) {
+		vector<string>* strings = StringToStrings(GetParameter("uptake limits"),";");
+		for (int i=0; i < int(strings->size()); i++) {
+			vector<string>* stringsTwo = StringToStrings((*strings)[i],":");
+			if (stringsTwo->size() >= 2) {
+				LinEquation* newConstraint = InitializeLinEquation("Uptake constraint",atof((*stringsTwo)[1].data()),LESS);
+				for (int j=0; j < this->FNumVariables();j++) {
+					MFAVariable* currVar = this->GetVariable(j);
+					if ((currVar->Type == FORWARD_DRAIN_FLUX || currVar->Type == DRAIN_FLUX) && currVar->AssociatedSpecies != NULL) {
+						int atomCount = currVar->AssociatedSpecies->CountAtomType((*stringsTwo)[0].data());
+						newConstraint->Variables.push_back(currVar);
+						newConstraint->Coefficient.push_back(atomCount);
+					}
+				}
+				this->AddConstraint(newConstraint);
+			}
+			delete stringsTwo;
+		}
+		delete strings;
+	}
+	return SUCCESS;
+}
+
+int MFAProblem::AddPROMConstraints(Data* InData, OptimizationParameter* InParameters) {
+	MFAVariable* alpha = InitializeMFAVariable();
+	alpha->Name.assign("alpha");
+	alpha->Type = REACTION_CONSTRAINT;
+	alpha->LowerBound = 0;
+	LoadVariable(AddVariable(alpha));
+	MFAVariable* beta = InitializeMFAVariable();
+	beta->Name.assign("beta");
+	beta->Type = REACTION_CONSTRAINT;
+	beta->LowerBound = 0;
+	LoadVariable(AddVariable(beta));
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->Type == FLUX || GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX) {
+			double promact = GetVariable(i)->AssociatedReaction->ComputePROMActivity();
+			if (promact != 1) {
+				LinEquation* NewConstraint = InitializeLinEquation();
+				NewConstraint->RightHandSide = promact*GetVariable(i)->Min;
+				NewConstraint->EqualityType =GREATER;
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint->ConstraintMeaning.assign("PROM min constraint");
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Variables.push_back(GetVariable(i));
+				NewConstraint->Variables.push_back(alpha);
+				NewConstraint->AssociatedReaction = GetVariable(i)->AssociatedReaction;
+				NewConstraint->AssociatedSpecies = GetVariable(i)->AssociatedReaction->GetReactant(i);
+				LoadConstToSolver(AddConstraint(NewConstraint));
+				LinEquation* NewConstraint2 = InitializeLinEquation();
+				NewConstraint2->RightHandSide = promact*GetVariable(i)->Max;
+				NewConstraint2->EqualityType =LESS;
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint2->ConstraintMeaning.assign("PROM max constraint");
+				NewConstraint2->Coefficient.push_back(1);
+				NewConstraint2->Coefficient.push_back(-1);
+				NewConstraint2->Variables.push_back(GetVariable(i));
+				NewConstraint2->Variables.push_back(beta);
+				NewConstraint2->AssociatedReaction = GetVariable(i)->AssociatedReaction;
+				NewConstraint2->AssociatedSpecies = GetVariable(i)->AssociatedReaction->GetReactant(i);
+				LoadConstToSolver(AddConstraint(NewConstraint2));
+			}
+		}
+	}
+	double Kappa = atof(GetParameter("PROM Kappa").data());
+	if (FMax()) {
+	  Kappa = -1 * Kappa; // because objective is max.
+	}
+	LinEquation* NewObjective = CloneLinEquation(GetObjective());
+	NewObjective->Variables.push_back(alpha);
+	NewObjective->Variables.push_back(beta);
+	NewObjective->Coefficient.push_back(Kappa);
+	NewObjective->Coefficient.push_back(Kappa);
+	AddObjective(NewObjective);
+	LoadObjective();
+}
+
+//This function determines the minimal additions to the media that must be made in order for growth to occur
+int MFAProblem::DetermineMinimalFeasibleMedia(Data* InData,OptimizationParameter* InParameters,bool augment_only) {
+	//Saving the old objective
+	SavedBounds* bounds = this->saveBounds();
+	LinEquation* OldObjective = GetObjective();
+	ObjFunct = NULL;
+	bool originalsense = this->FMax();
+	//Relaxing min flux constraint
+	double original_min_flux;
+	if (MinFluxConstraint != NULL) {
+		original_min_flux = MinFluxConstraint->RightHandSide;
+		MinFluxConstraint->RightHandSide = 100000;
+		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	//Setting objective to minimize drain fluxes or drain use variables
+	this->SetMin();
+	ClearObjective(true);
+	ObjFunct = InitializeLinEquation();
+	ObjFunct->ConstraintType = LINEAR;
+	if (InParameters->DrainUseVar) {
+		for (int i=0; i < FNumVariables(); i++) {
+			if (GetVariable(i)->Type == DRAIN_USE || GetVariable(i)->Type == FORWARD_DRAIN_USE) {
+				if (!augment_only || GetVariable(i)->UpperBound < MFA_ZERO_TOLERANCE) {
+					ObjFunct->Coefficient.push_back(1);
+					ObjFunct->Variables.push_back(GetVariable(i));
+					if (augment_only) {
+						GetVariable(i)->UpperBound = 100;
+					}
+				}
+			}
+		}
+	} else {
+		for (int i=0; i < FNumVariables(); i++) {
+			if (GetVariable(i)->Type == DRAIN_FLUX || GetVariable(i)->Type == FORWARD_DRAIN_FLUX) {
+				if (!augment_only || GetVariable(i)->UpperBound < MFA_ZERO_TOLERANCE) {
+					ObjFunct->Coefficient.push_back(1);
+					ObjFunct->Variables.push_back(GetVariable(i));
+					if (augment_only) {
+						GetVariable(i)->UpperBound = 100;
+					}
+				}
+			}
+		}
+	}
+	int Status = LoadObjective();
+	AlternativeSolutionExploration(InParameters,"MinimalMediaSolutions.txt");
+	//Restoring original problem
+	if (MinFluxConstraint != NULL) {
+		MinFluxConstraint->RightHandSide = original_min_flux;
+		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	delete ObjFunct;
+	if (originalsense) {
+		this->SetMax();
+	}
+	ObjFunct = OldObjective;
+	LoadObjective();
+	this->loadBounds(bounds,true);
+}
+
+//This is a new function for FBA attempting to better integrate all the various analyses we do
+int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationParameter* InParameters) {
+	//Clearing any existing problem
+	if (Variables.size() > 0 || Constraints.size() > 0) {
+		ClearObjective();
+		ClearConstraints();
+		ClearVariables();
+	}
+	//Building core problem
+	BuildCoreProblem(InData,InParameters);
+	this->LoadSolver();
+	bool rerun = false;
+	OptSolutionData* CurrentSolution = RunSolver(true,true,true);
+	if (CurrentSolution == NULL || CurrentSolution->Status != SUCCESS) {
+		string Note;
+		Note.append("FBA failed with satus:");
+		Note.append(itoa(CurrentSolution->Status));
+		PrintProblemReport(FLAG,InParameters,Note);
+		return FAIL;
+	}
+	//If initial objective is zero, we conduct appropriate followup studies
+	if (fabs(CurrentSolution->Objective) < MFA_ZERO_TOLERANCE) {
+		if (InParameters->OptimizeMediaWhenZero) {
+			DetermineMinimalFeasibleMedia(InData,InParameters,true);
+		}
+		if (InParameters->OptimizeMetabolitesWhenZero) {
+			string NewNote;
+			CheckIndividualMetaboliteProduction(InData,InParameters,GetParameter("metabolites to optimize"),false,false,NewNote,true);
+		}
+		return FAIL;
+	}
+	//Fixing objective at max
+	int sense = GREATER;
+	if (!FMax()) {
+		sense = LESS;
+	}
+	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
+	if (InParameters->DoMinimizeFlux) {
+		ObjectiveConstraint->RightHandSide = CurrentSolution->Objective;//Fixing objective at maximum value
+		LoadConstToSolver(ObjectiveConstraint->Index);
+		LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
+		ObjFunct = NULL;
+		this->AddSumObjective(FLUX,false,false,1,false);
+		this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
+		this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
+		this->SetMin();
+		int Status = LoadObjective();
+		OptSolutionData* CurrentSolution = RunSolver(true,true,true);
+		MinFluxConstraint = MakeObjectiveConstraint(CurrentSolution->Objective*atof(GetParameter("Min flux multiplier").data()),GREATER);//Setting constraint fixing min fluxes
+		LoadConstToSolver(MinFluxConstraint->Index);
+		ObjFunct = CurrentObjective;//Restoring original objective
+		if (sense == GREATER) {
+			this->SetMax();
+		}
+		int Status = LoadObjective();
+	}
+	if (InParameters->PROM) {
+		this->FindTightBounds(InData,InParameters,false,true);
+	}
+	if (InParameters->PROM) {
+		InData->LoadPROMModel(GetParameter("PROM model filename"));//Loads PROM model data from file
+		this->AddPROMConstraints(InData,InParameters);//Add the PROM constraints tightening bounds based on TF status
+		rerun = true;
+	}
+	//Now we enter the "exclusive analyses" which cannot be mixed and matched
+	if (InParameters->TranscriptomeAnalysis) {
+		//InData->LoadTranscriptomeData(GetParameter("Transcriptome filename"));//Loads transcriptome data from file (TODO)
+		//this->BuildTranscriptomeAnalysisObjective(InData,InParameters);//Build the transcriptome analysis objective (TODO)
+	} else if (InParameters->GapFilling) {
+		//this->BuildGapfillingAnalysisObjective(InData,InParameters);//Build the gapfilling analysis objective (TODO)
+	} else if (InParameters->GapGeneration) {
+
+	} else if (InParameters->QuantitativeOptimization) {
+		this->QuantitativeModelOptimization(InData,InParameters);
+	} else if (InParameters->DetermineMinimalMedia) {
+		this->DetermineMinimalFeasibleMedia(InData,InParameters,false);
+	} else if (InParameters->PhenotypeAnalysis) {
+		//this->RunDeletionExperiment()
+	} else if (InParameters->PerformSingleKO) {
+
+	//} else if (InParameters->MetaboliteOptimizationAnalysis) {
+	} else if (InParameters->FluxVariabilityAnalysis) {
+
+	} else if (InParameters->DoCalculateSensitivity) {
+
+	} else if (InParameters->DoFluxCouplingAnalysis) {
+
+	} else {//Just a single FBA optimzation was requested
+
+	}
+}
+
 //This function assumes that the desired objective function has already been loaded
 int MFAProblem::OptimizeSingleObjective(Data* InData, OptimizationParameter* InParameters, bool DoFindTightBounds, bool MinimizeForeignReactions, double &ObjectiveValue, string Note, bool SubProblem) {
 	int Status = SUCCESS;
@@ -6178,6 +6472,7 @@ int MFAProblem::LoadBiomassDrainReactions(Data* InData, OptimizationParameter* I
 			InData->AddReaction(NewReaction);
 		}
 	}
+	return SUCCESS;
 }
 
 int MFAProblem::LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters) {
@@ -7669,6 +7964,247 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 	return SUCCESS;
 }
 
+int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParameter* InParameters) {
+	//Clearing any existing problem
+	if (Variables.size() > 0 || Constraints.size() > 0) {
+		ClearObjective();
+		ClearConstraints();
+		ClearVariables();
+	}
+	//Maximizing growth
+	BuildMFAProblem(InData,InParameters);
+	this->LoadSolver();
+	OptSolutionData* Solution = RunSolver(true,true,true);
+	LinEquation* ObjConst = MakeObjectiveConstraint(0.1*Solution->Objective,GREATER);
+	LoadConstToSolver(ObjConst->Index);
+	//Running FVA to classify reactions at suboptimal growth
+	this->FindTightBounds(InData,InParameters,false,true);
+	map<Reaction*,string> ReactionClasses;
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->AssociatedReaction != NULL && GetVariable(i)->Type == FLUX) {
+			if (GetVariable(i)->Max < -1e-7) {
+				ReactionClasses[GetVariable(i)->AssociatedReaction] = "N";
+			} else if (GetVariable(i)->Min > 1e-7) {
+				ReactionClasses[GetVariable(i)->AssociatedReaction] = "P";
+			} else if (GetVariable(i)->Max < 1e-7 && GetVariable(i)->Min > -1e-7) {
+				ReactionClasses[GetVariable(i)->AssociatedReaction] = "B";
+			}
+		}
+	}
+	//Fixing objective at max and minimizing fluxes
+	ObjConst->RightHandSide = Solution->Objective;
+	LoadConstToSolver(ObjConst->Index);
+	LinEquation* CurrentObjective = ObjFunct;
+	this->AddSumObjective(FLUX,false,false,1,false);
+	this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
+	this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
+	this->SetMin();
+	int Status = LoadObjective();
+	OptSolutionData* MinFluxSolution = RunSolver(true,true,true);
+	LinEquation* MinFluxObjConst = MakeObjectiveConstraint(MinFluxSolution->Objective,GREATER);
+	//Computing bounds on minimized flux at optimal growth
+	this->FindTightBounds(InData,InParameters,false,true);
+	float maxbound = 0;
+	//Determining max bound in min flux FVA
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX || GetVariable(i)->Type == FLUX)) {
+			if (GetVariable(i)->Max > maxbound) {
+				maxbound = GetVariable(i)->Max;
+			}
+		}
+	}
+	//Calculating flux range for quantitative optimization analysis
+	map<Reaction*,float> ForwardReactionBounds;
+	map<Reaction*,float> ReverseReactionBounds;
+	float boundmult = atof(GetParameter("quantopt fva bound multiplier").data());
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == FLUX)) {
+			if (GetVariable(i)->Max == 0) {
+				if (ReactionClasses.count(GetVariable(i)->AssociatedReaction) == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("b") == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("n") == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("p") == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+				}
+			} else {
+				ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = boundmult*GetVariable(i)->Max;
+			}
+		} else if (GetVariable(i)->AssociatedReaction != NULL && GetVariable(i)->Type == REVERSE_FLUX) {
+			if (GetVariable(i)->Max == 0) {
+				if (ReactionClasses.count(GetVariable(i)->AssociatedReaction) == 0) {
+					ReverseReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("b") == 0) {
+					ReverseReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("n") == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
+				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("p") == 0) {
+					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+				}
+			} else {
+				ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = boundmult*GetVariable(i)->Max;
+			}
+		}
+	}
+
+
+//	//Loading biomass component reactions, which provide for new components in biomass
+//	LoadBiomassDrainReactions(InData,InParameters);
+//	//Loading ATP synthase reaction with alternative stoichiometry
+//	Reaction* NewReaction = new Reaction("lowatp",InData);
+//	Reaction* NewReaction = new Reaction("highatp",InData);
+//	for (int i=0; i < InData->FNumReactions(); i++) {
+//		float max = 0;
+//		float min = 0;
+//		InData->GetReaction(i)->DecomposeToPiecewiseFluxBounds(this,max,min);
+//	}
+//	//Building full objective function: normal objective - 0.000001 * sum of fluxes
+//	float minfluxcoef = atof(GetParameter("QuantOpt min flux coefficient").data());
+//	for (int i=0; i < int(ObjFunct->Variables.size()); i++) {
+//		ObjFunct->Coefficient[i] = -1*minfluxcoef;
+//	}
+//	for (int i=0; i < int(CurrentObjective->Variables.size()); i++) {
+//		ObjFunct->Coefficient.push_back(CurrentObjective->Coefficient[i]);
+//		ObjFunct->Variables.push_back(CurrentObjective->Variables[i]);
+//	}
+//	this->SetMax();
+//	int NumOriginalVariables = FNumVariables();
+//	//Building the dual problem
+//	MFAProblem* NewProblem = new MFAProblem();
+//	NewProblem->BuildDualMFAProblem(this,InData,InParameters);
+//	ResetIndecies();
+//	//Adding dual constraints and variables
+//	for (int i=0; i < NewProblem->FNumConstraints(); i++) {
+//		AddConstraint(NewProblem->GetConstraint(i));
+//	}
+//	for (int i=0; i < NewProblem->FNumVariables(); i++) {
+//		if (NewProblem->GetVariable(i)->Binary == false) {
+//			AddVariable(NewProblem->GetVariable(i));
+//		}
+//	}
+//	//Creating a constraint setting the dual objective equal to the primal objective
+//	LinEquation* NewConstraint = InitializeLinEquation();
+//	for (int i=0; i < int(GetObjective()->Variables.size()); i++) {
+//		NewConstraint->Variables.push_back(GetObjective()->Variables[i]);
+//		NewConstraint->Coefficient.push_back(GetObjective()->Coefficient[i]);
+//	}
+//	for (int i=0; i < int(NewProblem->GetObjective()->Variables.size()); i++) {
+//		NewConstraint->Variables.push_back(NewProblem->GetObjective()->Variables[i]);
+//		NewConstraint->Coefficient.push_back(-NewProblem->GetObjective()->Coefficient[i]);
+//	}
+//	NewConstraint->EqualityType = EQUAL;
+//	NewConstraint->RightHandSide = 0;
+//	NewConstraint->ConstraintMeaning = "Setting primal objective equal to dual objective";
+//	AddConstraint(NewConstraint);
+//	//Adding constraints supplied to quantopt
+//	FileBounds* NewBounds = ReadBounds("QuantOptMedia");
+//	for (int i=0; i < int(NewBounds->VarName.size()); i++) {
+//		if (NewBounds->VarType[i] == DRAIN_FLUX) {
+//			Species* MediaSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
+//			if (MediaSpecies != NULL) {
+//				MFAVariable* TempVariable = MediaSpecies->GetMFAVar(DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+//				if (TempVariable != NULL) {
+//					TempVariable = SecondNetworkVariables[TempVariable->Index];
+//					TempVariable->UpperBound = NewBounds->VarMax[i];
+//					TempVariable->LowerBound = NewBounds->VarMin[i];
+//				} else {
+//					TempVariable = MediaSpecies->GetMFAVar(FORWARD_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+//					if (TempVariable != NULL) {
+//						TempVariable = SecondNetworkVariables[TempVariable->Index];
+//						if (NewBounds->VarMax[i] > 0) {
+//							TempVariable->UpperBound = NewBounds->VarMax[i];
+//							if (NewBounds->VarMin[i] > 0) {
+//								TempVariable->LowerBound = NewBounds->VarMin[i];
+//							} else {
+//								TempVariable->LowerBound = 0;
+//							}
+//						} else {
+//							TempVariable->UpperBound = 0;
+//							TempVariable->LowerBound = 0;
+//						}
+//					}
+//					TempVariable = MediaSpecies->GetMFAVar(REVERSE_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
+//					if (TempVariable != NULL) {
+//						TempVariable = SecondNetworkVariables[TempVariable->Index];
+//						if (NewBounds->VarMin[i] < 0) {
+//							TempVariable->UpperBound = -NewBounds->VarMin[i];
+//							if (NewBounds->VarMax[i] > 0) {
+//								TempVariable->LowerBound = 0;
+//							} else {
+//								TempVariable->LowerBound = -NewBounds->VarMax[i];
+//							}
+//						} else {
+//							TempVariable->UpperBound = 0;
+//							TempVariable->LowerBound = 0;
+//						}
+//					}
+//				}
+//			}
+//		}
+//	}
+//	//Building the objective function
+//	NewObjective = InitializeLinEquation();
+//	for (int i=0; i < FNumVariables(); i++) {
+//		if (GetVariable(i)->Binary) {
+//			double Coefficient = 1;
+//			if (GetVariable(i)->AssociatedReaction != NULL) {
+//				if (GetVariable(i)->AssociatedReaction->FType() != REVERSIBLE) {
+//					Coefficient++;
+//					if (GetVariable(i)->AssociatedReaction->FNumGeneGroups() > 0) {
+//						Coefficient++;
+//					}
+//				} else if (GetVariable(i)->AssociatedReaction->FEstDeltaG() != FLAG) {
+//					if (GetVariable(i)->AssociatedReaction->FmMDeltaG(true) < 0 && GetVariable(i)->Type == FORWARD_USE) {
+//						Coefficient = Coefficient - 0.2*GetVariable(i)->AssociatedReaction->FmMDeltaG(true);
+//					} else if (GetVariable(i)->AssociatedReaction->FmMDeltaG(true) > 0 && GetVariable(i)->Type == REVERSE_USE) {
+//						Coefficient = Coefficient + 0.2*GetVariable(i)->AssociatedReaction->FmMDeltaG(true);
+//					}
+//				}
+//			}
+//			NewObjective->Variables.push_back(GetVariable(i));
+//			NewObjective->Coefficient.push_back(Coefficient);
+//		}
+//	}
+//	AddObjective(NewObjective);
+//	SetMax();
+//	ResetIndecies();
+//	vector<int> VariableTypes;
+//	VariableTypes.push_back(OBJECTIVE_TERMS);
+//	ResetSolver();
+//	LoadSolver();
+//	int solutionCount = this->FNumSolutions();
+//	string Note;
+//	if (RecursiveMILP(InData,InParameters,VariableTypes,false) <= 0) {
+//		Note.append("No gap generation solution exists.");
+//		PrintProblemReport(FLAG,InParameters,Note);
+//	} else {
+//		ofstream Output;
+//		OpenOutput(Output,FOutputFilepath()+"QuantitativeOptimization.txt",true);
+//		Output << "Objective\tReactions" << endl;
+//		for (int i=solutionCount; i < this->FNumSolutions(); i++) {
+//			OptSolutionData* newSolution = this->GetSolution(i);
+//			if (newSolution->Notes.compare("Recursive milp solution") == 0) {
+//				bool First = true;
+//				Output << newSolution->Objective << "\t";
+//				for (int j=0; j < int(NewObjective->Variables.size()); j++) {
+//					if (newSolution->SolutionData[NewObjective->Variables[j]->Index] < 0.5 && NewObjective->Variables[j]->Type != COMPLEX_USE) {
+//						if (!First) {
+//							Output << ",";
+//						}
+//						Output << NewObjective->Variables[j]->Name;
+//						First = false;
+//					}
+//				}
+//				Output << endl;
+//			}
+//		}
+//		Output.close();
+//	}
+//	return SUCCESS;
+}
+
 int MFAProblem::SolutionReconciliation(Data* InData, OptimizationParameter* InParameters) {
 	//Loading subsystem data from file
 	ifstream Input;
@@ -8271,164 +8807,6 @@ string MFAProblem::MediaSensitivityExperiment(Data* InData, OptimizationParamete
 
 	return Note;
 }//END: MediaSensitivityExperiment(Data* InData, OptimizationParameter* InParameters, bool AddMedia)
-
-/*FitMicroarrayAssertions
-Author: Christopher Henry, Argonne National Laboratory, 11/8/2009
-Description: Reads in a file with gene on/off assertions made based on microarray data. 
-	Attempts to run the model in such a way that agreement with these assertions is maximized*/
-int MFAProblem::FitMicroarrayAssertions(Data* InData) {
-	//Read in optimization parameters
-	OptimizationParameter* Parameters = ReadParameters();
-	//Adjusting settings for study
-	Parameters->DecomposeReversible = true;
-	Parameters->GeneConstraints = true;
-	Parameters->ReactionsUse = true;
-	Parameters->AllReactionsUse = true;
-	//Building problem
-	if (BuildMFAProblem(InData,Parameters) != SUCCESS) {
-		cerr << "Could not build microarray assertion problem!" << endl;
-		return FAIL;
-	}
-	//Checking that model grows
-	string Note;
-	double ObjectiveValue = 0;
-	if (OptimizeSingleObjective(InData,Parameters,GetParameter("objective"),false,false,ObjectiveValue,Note) != SUCCESS) {
-		cerr << "Could not run microarray assertion problem!" << endl;
-		return FAIL;
-	}
-	if (ObjectiveValue == 0) {
-		cerr << "Model did not grow!" << endl;
-		return FAIL;
-	}
-	//Fixing growth to a nonzero value
-	if (Max) {
-		LoadConstToSolver(MakeObjectiveConstraint(Parameters->OptimalObjectiveFraction*ObjectiveValue,GREATER)->Index);
-	} else {
-		LoadConstToSolver(MakeObjectiveConstraint(Parameters->OptimalObjectiveFraction*ObjectiveValue,LESS)->Index);
-	}
-	//Parsing microarray assertion into objective
-	vector<string>* GeneCoef = StringToStrings(GetParameter("Microarray assertions"),";");
-	if (GeneCoef->size() <= 2) {
-		cerr << "No genes specified as off!" << endl;
-		return FAIL;
-	}
-	string Model = (*GeneCoef)[0];
-	string Index = (*GeneCoef)[1];
-	map<string,double> CoeffMap;
-	LinEquation* NewObjective = InitializeLinEquation("Microarray assertion objective");
-	for (int i=2; i < int(GeneCoef->size()); i++) {
-		vector<string>* CoefPair = StringToStrings((*GeneCoef)[i],":");
-		Gene* CurrentGene = InData->FindGene("NAME;DATABASE;ENTRY",(*CoefPair)[0].data());
-		if (CurrentGene != NULL) {
-			CoeffMap[(*CoefPair)[0]] = atof((*CoefPair)[1].data());
-		}
-		delete CoefPair;
-	}
-	for (int i=0; i < FNumVariables(); i++) {
-		if (GetVariable(i)->Type == GENE_USE) {
-			NewObjective->Variables.push_back(GetVariable(i));
-			if (CoeffMap.count(GetVariable(i)->Name) > 0) {
-				if (CoeffMap[GetVariable(i)->Name] > 0) {
-					NewObjective->Coefficient.push_back(0.0001);
-				} else if (CoeffMap[GetVariable(i)->Name] < 0) {
-					NewObjective->Coefficient.push_back(0.01-10*CoeffMap[GetVariable(i)->Name]);
-				} else {
-					NewObjective->Coefficient.push_back(0.01);
-				}
-			} else {
-				NewObjective->Coefficient.push_back(0.01);
-			}
-		}
-	}
-	AddObjective(NewObjective);
-	SetMin();
-	LoadObjective();
-	//Optimizing objective
-	OptSolutionData* Solution = RunSolver(true,true,true);
-	if (Solution == NULL) {
-		cerr << "No solution found!" << endl;
-		return FAIL;
-	}
-	//Printing violating genes in the problem report
-	string CalledOnModelOn;
-	string CalledOnModelOff;
-	string CalledGreyModelOn;
-	string CalledGreyModelOff;
-	string CalledOffModelOn;
-	string CalledOffModelOff;
-	int CalledOnModelOnCount = 0;
-	int CalledOnModelOffCount = 0;
-	int CalledGreyModelOnCount = 0;
-	int CalledGreyModelOffCount = 0;
-	int CalledOffModelOnCount = 0;
-	int CalledOffModelOffCount = 0;
-	Note.assign("Violating genes:");
-	for (int i=0; i < int(NewObjective->Variables.size()); i++) {
-		if (NewObjective->Variables[i]->Value == 1) { 
-			if (CoeffMap.count(NewObjective->Variables[i]->Name) > 0 && CoeffMap[NewObjective->Variables[i]->Name] < 0) {
-				if (CalledOffModelOn.length() > 0) {
-					CalledOffModelOn.append(",");
-				}
-				CalledOffModelOnCount++;
-				CalledOffModelOn.append(NewObjective->Variables[i]->Name);
-				Note.append(NewObjective->Variables[i]->Name+",");
-			} else if (CoeffMap.count(NewObjective->Variables[i]->Name) > 0 && CoeffMap[NewObjective->Variables[i]->Name] > 0) {
-				if (CalledOnModelOn.length() > 0) {
-					CalledOnModelOn.append(",");
-				}
-				CalledOnModelOnCount++;
-				CalledOnModelOn.append(NewObjective->Variables[i]->Name);
-			} else {
-				if (CalledGreyModelOn.length() > 0) {
-					CalledGreyModelOn.append(",");
-				}
-				CalledGreyModelOnCount++;
-				CalledGreyModelOn.append(NewObjective->Variables[i]->Name);
-			}
-		} else {
-			if (CoeffMap.count(NewObjective->Variables[i]->Name) > 0 && CoeffMap[NewObjective->Variables[i]->Name] < 0) {
-				if (CalledOffModelOff.length() > 0) {
-					CalledOffModelOff.append(",");
-				}
-				CalledOffModelOffCount++;
-				CalledOffModelOff.append(NewObjective->Variables[i]->Name);
-			} else if (CoeffMap.count(NewObjective->Variables[i]->Name) > 0 && CoeffMap[NewObjective->Variables[i]->Name] > 0) {
-				if (CalledOnModelOff.length() > 0) {
-					CalledOnModelOff.append(",");
-				}
-				CalledOnModelOffCount++;
-				CalledOnModelOff.append(NewObjective->Variables[i]->Name);
-				Note.append(NewObjective->Variables[i]->Name+",");
-			} else {
-				if (CalledGreyModelOff.length() > 0) {
-					CalledGreyModelOff.append(",");
-				}
-				CalledGreyModelOffCount++;
-				CalledGreyModelOff.append(NewObjective->Variables[i]->Name);
-			}
-		}
-	}
-
-	if (Note.length() == 16) {
-		Note.assign("No violations");
-	} else {
-		Note = Note.substr(0,Note.length()-1);
-	}
-	PrintProblemReport(Solution->Objective,Parameters,Note);
-	delete GeneCoef;
-	//Printing analysis results in output files
-	ofstream Output;
-	string Media = GetParameter("user bounds filename");
-	Media = Media.substr(0,Media.length()-4);
-	string JobID = GetParameter("output folder");
-	JobID = JobID.substr(0,JobID.length()-1);
-	if (OpenOutput(Output,FOutputFilepath()+"MicroarrayOutput.txt")) {
-		Output << "Model;Media;On on;On off;On;Off;Off on;Off off;On on count;On off count;On count;Off count;Off on count;Off off count" << endl;
-		Output << Model << ";" << Media << ";" << CalledOnModelOn << ";" << CalledOnModelOff << ";" << CalledGreyModelOn << ";" << CalledGreyModelOff << ";" << CalledOffModelOn << ";" << CalledOffModelOff << ";" << CalledOnModelOnCount << ";" << CalledOnModelOffCount << ";" << CalledGreyModelOnCount << ";" << CalledGreyModelOffCount << ";" << CalledOffModelOnCount << ";" << CalledOffModelOffCount << endl;
-		Output.close();
-	}
-	return SUCCESS;
-}
 
 /*FitGimme
 Author: Shinnosuke Kondo, Hope College, 6/27/2012. The code is originated from FitMicroarrayAssertions.
