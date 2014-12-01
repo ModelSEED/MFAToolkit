@@ -3918,7 +3918,6 @@ void Species::CreateMFAVariables(OptimizationParameter* InParameters) {
 	if (InParameters == NULL) {
 		return;
 	}
-
 	if (InParameters->ThermoConstraints && InParameters->DeltaGError) {
 		MFAVariable* NewVariable = InitializeMFAVariable();
 		NewVariable->AssociatedSpecies = this;
@@ -3943,9 +3942,7 @@ void Species::CreateMFAVariables(OptimizationParameter* InParameters) {
 			NewVariable->UpperBound = InParameters->ErrorMult*DEFAULT_DELTAGF_ERROR;
 		}
 	}
-
-	if (InParameters->ThermoConstraints) {
-		//Every compartment represented in the current model must have a variable for the hydrogen ion concentration
+	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		if (FFormula().compare("H") == 0) {
 			for (int i=0; i < FNumCompartments(); i++) {
 				if (FMainData()->CompartmentRepresented(i)) {
@@ -3953,30 +3950,30 @@ void Species::CreateMFAVariables(OptimizationParameter* InParameters) {
 				}
 			}
 		}
-		
 		for (map<int , SpeciesCompartment* , std::less<int> >::iterator MapIT = Compartments.begin(); MapIT != Compartments.end(); MapIT++) {
-			MFAVariable* NewVariable = InitializeMFAVariable();
-			NewVariable->AssociatedSpecies = this;
-			NewVariable->Name = GetData("DATABASE",STRING);
-			NewVariable->Compartment = MapIT->second->Compartment->Index;
-			NewVariable->Type = POTENTIAL;
-			MapIT->second->MFAVariables[POTENTIAL] = NewVariable;
-			if (FFormula().compare("H2O") == 0) {
-				NewVariable->LowerBound = AdjustedDeltaG(GetCompartment(NewVariable->Compartment)->IonicStrength,GetCompartment(NewVariable->Compartment)->pH,InParameters->Temperature);
-				NewVariable->UpperBound = AdjustedDeltaG(GetCompartment(NewVariable->Compartment)->IonicStrength,GetCompartment(NewVariable->Compartment)->pH,InParameters->Temperature);
-			} else {
-				NewVariable->LowerBound = InParameters->MinPotential;
-				NewVariable->UpperBound = InParameters->MaxPotential;
-			}
-			if (!InParameters->SimpleThermoConstraints || FFormula().compare("H") == 0) {
-				NewVariable = InitializeMFAVariable();
+			if (MapIT->second != NULL) {
+				MFAVariable* NewVariable = InitializeMFAVariable();
 				NewVariable->AssociatedSpecies = this;
 				NewVariable->Name = GetData("DATABASE",STRING);
 				NewVariable->Compartment = MapIT->second->Compartment->Index;
-				NewVariable->Type = LOG_CONC;
-				MapIT->second->MFAVariables[LOG_CONC] = NewVariable;
-				NewVariable->LowerBound = log(MapIT->second->Compartment->MinConc);
-				NewVariable->UpperBound = log(MapIT->second->Compartment->MaxConc);
+				NewVariable->Type = POTENTIAL;
+				MapIT->second->MFAVariables[POTENTIAL] = NewVariable;
+				NewVariable->LowerBound = -InParameters->MaxPotential;
+				NewVariable->UpperBound = InParameters->MaxPotential;
+				if (!InParameters->SimpleThermoConstraints) {
+					if (FFormula().compare("H2O") == 0) {
+						NewVariable->LowerBound = AdjustedDeltaG(GetCompartment(NewVariable->Compartment)->IonicStrength,GetCompartment(NewVariable->Compartment)->pH,InParameters->Temperature);
+						NewVariable->UpperBound = AdjustedDeltaG(GetCompartment(NewVariable->Compartment)->IonicStrength,GetCompartment(NewVariable->Compartment)->pH,InParameters->Temperature);
+					}
+					NewVariable = InitializeMFAVariable();
+					NewVariable->AssociatedSpecies = this;
+					NewVariable->Name = GetData("DATABASE",STRING);
+					NewVariable->Compartment = MapIT->second->Compartment->Index;
+					NewVariable->Type = LOG_CONC;
+					MapIT->second->MFAVariables[LOG_CONC] = NewVariable;
+					NewVariable->LowerBound = log(MapIT->second->Compartment->MinConc);
+					NewVariable->UpperBound = log(MapIT->second->Compartment->MaxConc);
+				}
 			}
 		}
 	}

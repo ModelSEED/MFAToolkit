@@ -1065,6 +1065,20 @@ int ConvertVariableType(string TypeName) {
 		return GENE_UNUSE;
 	} else if (TypeName.compare("REACTION_CONSTRAINT") == 0) {
 		return REACTION_CONSTRAINT;
+	} else if (TypeName.compare("REACTION_SLACK") == 0) {
+		return REACTION_SLACK;
+	} else if (TypeName.compare("SUBUNIT_EXP") == 0) {
+		return SUBUNIT_EXP;
+	} else if (TypeName.compare("COMPLEX_EXP") == 0) {
+		return COMPLEX_EXP;
+	} else if (TypeName.compare("GENE_EXP") == 0) {
+		return GENE_EXP;
+	} else if (TypeName.compare("FORWARD_REACTION") == 0) {
+		return FORWARD_REACTION;
+	} else if (TypeName.compare("POSITIVE_DELTAG") == 0) {
+		return POSITIVE_DELTAG;
+	} else if (TypeName.compare("NEGATIVE_DELTAG") == 0) {
+		return NEGATIVE_DELTAG;
 	}
 
 	FErrorFile() << "Unrecognized MFA variable type: " << TypeName << endl;
@@ -1139,7 +1153,21 @@ string ConvertVariableType(int Type) {
 	} else if (Type == GENE_UNUSE) {
 		TypeName.assign("GENE_UNUSE");	
 	} else if (Type == REACTION_CONSTRAINT) {
-		TypeName.assign("REACTION_CONSTRAINT");	
+		TypeName.assign("REACTION_CONSTRAINT");
+	} else if (Type == REACTION_SLACK) {
+		TypeName.assign("REACTION_SLACK");
+	} else if (Type == SUBUNIT_EXP) {
+		TypeName.assign("SUBUNIT_EXP");
+	} else if (Type == COMPLEX_EXP) {
+		TypeName.assign("COMPLEX_EXP");
+	} else if (Type == GENE_EXP) {
+		TypeName.assign("GENE_EXP");
+	} else if (Type == FORWARD_REACTION) {
+		TypeName.assign("FORWARD_REACTION");
+	} else if (Type == POSITIVE_DELTAG) {
+		TypeName.assign("POSITIVE_DELTAG");
+	} else if (Type == NEGATIVE_DELTAG) {
+		TypeName.assign("NEGATIVE_DELTAG");
 	} else {
 		FErrorFile() << "Unrecognized MFA variable type number: " << Type << endl;
 		FlushErrorFile();
@@ -1204,84 +1232,98 @@ void LoosenBounds(FileBounds* InBounds) {
 //Loads the MFA parameters from the parameters file
 OptimizationParameter* ReadParameters() {
 	OptimizationParameter* NewParameters = new OptimizationParameter;
-	NewParameters->GeneConstraints = false;
-	NewParameters->AlternativeSolutionAlgorithm = false;
-	NewParameters->DoMinimizeFlux = false;
-	NewParameters->DetermineMinimalMedia = false;
-	if (GetParameter("flux minimization").compare("1") == 0) {
-		NewParameters->DoMinimizeFlux = true;
-	}
-	if (GetParameter("calculate flux sensitivity").compare("1") == 0) {
-		NewParameters->DoCalculateSensitivity= true;
-	}
-	if (GetParameter("determine minimal required media").compare("1") == 0) {
-		NewParameters->DetermineMinimalMedia= true;
-	}
+	//Study parameters
+	NewParameters->omega = atof(GetParameter("omega").data());
+	NewParameters->alpha = atof(GetParameter("alpha").data());
+	NewParameters->ScalePenaltyByFlux = GetParameter("scale penalty by flux").compare("1") == 0;
+	NewParameters->PROM = GetParameter("prom constraints").compare("1") == 0;
+	NewParameters->TranscriptomeAnalysis = GetParameter("transcriptome analysis").compare("1") == 0;
+	NewParameters->PhenotypeAnalysis = GetParameter("phenotype analysis").compare("1") == 0;
+	NewParameters->QuantitativeOptimization = GetParameter("quantitative optimization").compare("1") == 0;
+	NewParameters->FluxVariabilityAnalysis = GetParameter("find tight bounds").compare("1") == 0;
+	NewParameters->DoCalculateSensitivity = GetParameter("calculate flux sensitivity").compare("1") == 0;
+	NewParameters->DetermineMinimalMedia = GetParameter("determine minimal required media").compare("1") == 0;
+	NewParameters->DoMinimizeFlux = GetParameter("flux minimization").compare("1") == 0;
+	NewParameters->CheckReactionEssentiality  = (GetParameter("check for reaction essentiality").compare("1") == 0);
+	NewParameters->GapFilling = (GetParameter("Perform gap filling").compare("1") == 0);
+	NewParameters->GapGeneration = (GetParameter("Perform gap generation").compare("1") == 0);
+	NewParameters->PerformSingleKO = (GetParameter("perform single KO experiments").compare("1") == 0);
+	NewParameters->PerformIntervalKO = (GetParameter("perform interval KO experiments").compare("1") == 0);
+	NewParameters->PerformIntervalStrainExperiments = (GetParameter("perform interval strain experiments").compare("1") == 0);
+	NewParameters->PerformGeneStrainExperiments = (GetParameter("perform gene strain experiments").compare("1") == 0);
+	NewParameters->DoFluxCouplingAnalysis  = (GetParameter("do flux coupling analysis").compare("1") == 0);
+	NewParameters->DoMILPCoessentiality  = (GetParameter("do MILP coessentiality analysis").compare("1") == 0);
+	NewParameters->DoMinimizeReactions  = (GetParameter("Minimize reactions").compare("1") == 0);
+	NewParameters->GeneOptimization = (GetParameter("optimize organism genes").compare("1") == 0);
+	NewParameters->IntervalOptimization = (GetParameter("optimize organism intervals").compare("1") == 0);
+	NewParameters->DeletionOptimization = (GetParameter("optimize deletions").compare("1") == 0);
+	NewParameters->MinimizeDeltaGError = (GetParameter("minimize deltaG error").compare("1") == 0);
 
-	//I load all parameters from the parameters map
+	//Variable use parameters
+	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);
+	NewParameters->AllDrainUse = (GetParameter("Force use variables for all drain fluxes").compare("1") == 0);
+	NewParameters->DrainUseVar = (GetParameter("Add use variables for any drain fluxes").compare("1") == 0);
+	NewParameters->DecomposeDrain = (GetParameter("Decompose reversible drain fluxes").compare("1") == 0);
+	NewParameters->AllReversible = (GetParameter("Make all reactions reversible in MFA").compare("1") == 0);
+	NewParameters->AllReactionsUse = (GetParameter("Force use variables for all reactions").compare("1") == 0);
+	NewParameters->SingleRxnUse = false;
+	NewParameters->DecomposeReversible = (GetParameter("Decompose reversible reactions").compare("1") == 0);
+	NewParameters->BinaryReactionSlackVariable = false;
+	NewParameters->ReactionSlackVariable = false;
+	NewParameters->ReactionErrorUseVariables = (GetParameter("include error use variables").compare("1") == 0);
+
+	//Constraint use parameters
+	NewParameters->GeneConstraints = false;
+	NewParameters->MassBalanceConstraints = (GetParameter("Mass balance constraints").compare("1") == 0);
+	NewParameters->ThermoConstraints = (GetParameter("Thermodynamic constraints").compare("1") == 0);
+	NewParameters->DeltaGError = (GetParameter("Account for error in delta G").compare("1") == 0);
+	NewParameters->SimpleThermoConstraints = (GetParameter("simple thermo constraints").compare("1") == 0);
+
+	//Physical parameters
 	NewParameters->Temperature = atof(GetParameter("Temperature").data());
+
+	//FBA parameters
 	NewParameters->MaxFlux = atof(GetParameter("Max flux").data());
-	NewParameters->MinFlux = atof(GetParameter("Min flux").data());
 	if (GetParameter("Max deltaG error").compare("DEFAULT") == 0) {
 		NewParameters->MaxError = FLAG;
 	} else {
 		NewParameters->MaxError = atof(GetParameter("Max deltaG error").data());
 	}
-	
-	NewParameters->SimpleThermoConstraints = (GetParameter("simple thermo constraints").compare("1") == 0);
-	NewParameters->GapFilling = (GetParameter("Perform gap filling").compare("1") == 0);
-	NewParameters->GapGeneration = (GetParameter("Perform gap generation").compare("1") == 0);
 	NewParameters->MaxDrainFlux = atof(GetParameter("Default max drain flux").data());
 	NewParameters->MinDrainFlux = atof(GetParameter("Default min drain flux").data());
 	NewParameters->MaxPotential = atof(GetParameter("Max potential").data());
 	NewParameters->MaxDeltaG = atof(GetParameter("Max deltaG").data());
+
+	NewParameters->MinFluxMultiplier = atof(GetParameter("Min flux multiplier").data());
 	NewParameters->OptimalObjectiveFraction = atof(GetParameter("Constrain objective to this fraction of the optimal value").data());
 	NewParameters->SolutionSizeInterval = atoi(GetParameter("Recursive MILP solution size interval").data());
 	NewParameters->RecursiveMILPSolutionLimit = atoi(GetParameter("Recursive MILP solution limit").data());
 	NewParameters->ErrorMult = atoi(GetParameter("error multiplier").data());
 	NewParameters->AlwaysReoptimizeOriginalObjective = (NewParameters->OptimalObjectiveFraction<1);
-
-	NewParameters->MassBalanceConstraints = (GetParameter("Mass balance constraints").compare("1") == 0);
-	NewParameters->DecomposeReversible = (GetParameter("Decompose reversible reactions").compare("1") == 0);
-	NewParameters->ThermoConstraints = (GetParameter("Thermodynamic constraints").compare("1") == 0);
 	NewParameters->CheckPotentialConstraints = (GetParameter("Check potential constraints feasibility").compare("1") == 0);
-	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);
-	NewParameters->DeltaGError = (GetParameter("Account for error in delta G").compare("1") == 0);
 	NewParameters->LoadTightBounds = (GetParameter("Load tight bounds").compare("1") == 0);
-	NewParameters->AllReactionsUse = (GetParameter("Force use variables for all reactions").compare("1") == 0);
 	NewParameters->LoadForeignDB = (GetParameter("Load foreign reaction database").compare("1") == 0);
 	NewParameters->MinimizeForeignReactions = (GetParameter("Minimize the number of foreign reactions").compare("1") == 0);
 	NewParameters->ReoptimizeSubOptimalObjective = (GetParameter("Reoptimize suboptimal objective during recursive MILP").compare("1") == 0);
 	NewParameters->DetermineCoEssRxns = (GetParameter("find coessential reactions for nonviable deletions").compare("1") == 0);
-
 	NewParameters->AddLumpedReactions = (GetParameter("Add lumped reactions").compare("1") == 0);
-	NewParameters->AllDrainUse = (GetParameter("Force use variables for all drain fluxes").compare("1") == 0);
-	NewParameters->DrainUseVar = (GetParameter("Add use variables for any drain fluxes").compare("1") == 0);
-	NewParameters->DecomposeDrain = (GetParameter("Decompose reversible drain fluxes").compare("1") == 0);
-	NewParameters->AllReversible = (GetParameter("Make all reactions reversible in MFA").compare("1") == 0);
 	NewParameters->OptimizeMetabolitesWhenZero = (GetParameter("optimize metabolite production if objective is zero").compare("1") == 0);
 	NewParameters->RelaxIntegerVariables = (GetParameter("relax integer variables when possible").compare("1") == 0);
-
 	NewParameters->ExcludeCurrentMedia = (GetParameter("exclude input media components from media optimization").compare("1") == 0);
 	NewParameters->IncludeDeadEnds = (GetParameter("uptake dead end compounds during media optimization").compare("1") == 0);
 	NewParameters->DeadEndCoefficient = atof(GetParameter("coefficient for dead end compound uptake").data());
-	NewParameters->PerformSingleKO = (GetParameter("perform single KO experiments").compare("1") == 0);
-	NewParameters->PerformIntervalKO = (GetParameter("perform interval KO experiments").compare("1") == 0);
-	NewParameters->PerformIntervalStrainExperiments = (GetParameter("perform interval strain experiments").compare("1") == 0);
-	NewParameters->PerformGeneStrainExperiments = (GetParameter("perform gene strain experiments").compare("1") == 0);
 	NewParameters->OptimizeMediaWhenZero = (GetParameter("optimize media when objective is zero").compare("1") == 0);
-	NewParameters->CheckReactionEssentiality  = (GetParameter("check for reaction essentiality").compare("1") == 0);
-	NewParameters->DoFluxCouplingAnalysis  = (GetParameter("do flux coupling analysis").compare("1") == 0);
-	NewParameters->DoMILPCoessentiality  = (GetParameter("do MILP coessentiality analysis").compare("1") == 0);
-	NewParameters->DoMinimizeReactions  = (GetParameter("Minimize reactions").compare("1") == 0);
 	NewParameters->DoRecursiveMILPStudy = (GetParameter("do recursive MILP study").compare("1") == 0);
-	NewParameters->GeneOptimization = (GetParameter("optimize organism genes").compare("1") == 0);
-	NewParameters->IntervalOptimization = (GetParameter("optimize organism intervals").compare("1") == 0);
-	NewParameters->DeletionOptimization = (GetParameter("optimize deletions").compare("1") == 0);
-	NewParameters->ReactionErrorUseVariables = (GetParameter("include error use variables").compare("1") == 0);
-	NewParameters->MinimizeDeltaGError = (GetParameter("minimize deltaG error").compare("1") == 0);
 	NewParameters->PrintSolutions = true;
 	NewParameters->ClearSolutions = true;
+
+	if (GetParameter("Simultaneous gapfill").compare("1") == 0 || NewParameters->TranscriptomeAnalysis) {
+		if (NewParameters->ReactionsUse) {
+			NewParameters->BinaryReactionSlackVariable = true;
+		} else {
+			NewParameters->ReactionSlackVariable = true;
+		}
+	}
 
 	string ReactionKO = GetParameter("Reactions to knockout");
 	if (ReactionKO.length() > 0 && ReactionKO.compare("none") != 0) {
@@ -1378,6 +1420,13 @@ OptimizationParameter* ReadParameters() {
 		delete Strings;
 	}
 
+	if (GetParameter("Gapfilling target reactions").length() > 0) {
+		vector<string>* Strings = StringToStrings(GetParameter("Gapfilling target reactions"),";");
+		for (int i=0; i < int(Strings->size()); i++) {
+			NewParameters->GapfillingTargetReactions.push_back((*Strings)[i]);
+		}
+		delete Strings;
+	}
 	string CoessentialityTargets = GetParameter("target reactions for coessentiality analysis");
 	if (CoessentialityTargets.length() > 0 && CoessentialityTargets.compare("none") != 0) {
 		vector<string>* Strings = StringToStrings(CoessentialityTargets,";");
@@ -1388,7 +1437,7 @@ OptimizationParameter* ReadParameters() {
 				for (int j=0; j < int(StringsTwo->size()); j++) {
 					TempList.push_back((*StringsTwo)[j]);
 				}
-				NewParameters->TargetReactions.push_back(TempList);
+				NewParameters->CoessentialityTargetReactions.push_back(TempList);
 			}
 			delete StringsTwo;
 		}
@@ -1527,7 +1576,6 @@ OptimizationParameter* ReadParameters() {
 
 	//Some parameter settings require other settings to be a certain way... this function ensures that all parameters are set properly
 	RectifyOptimizationParameters(NewParameters);
-
 	return NewParameters;
 }
 
@@ -1546,14 +1594,20 @@ void ClearParameters(OptimizationParameter* InParameters) {
 
 //Some parameter settings require other settings to be a certain way... this function ensures that all parameters are set properly
 void RectifyOptimizationParameters(OptimizationParameter* InParameters){
-	if (GetParameter("classify model genes").compare("1") == 0) {
-		if (GetParameter("Combinatorial deletions").compare("none") == 0) {
-			SetParameter("Combinatorial deletions","1");
-		}
-		SetParameter("find tight bounds","1");
+	if (InParameters->OptimalObjectiveFraction >= 1) {
+		InParameters->OptimalObjectiveFraction = 0.99;
+	}
+	if (InParameters->alpha > 0) {
+		InParameters->ReactionSlackVariable = 1;
+	}
+	if (InParameters->MinFluxMultiplier < 1) {
+		InParameters->MinFluxMultiplier = 1;
+	}
+	if (InParameters->DoMinimizeFlux && InParameters->OptimalObjectiveFraction > 0.99) {
+		InParameters->OptimalObjectiveFraction = 0.99;
 	}
 	//If the uptake of atoms is restricted, uptake fluxes must be decomposed
-	if (GetParameter("uptake limits").compare("none") != 0) {
+	if (GetParameter("uptake limits").compare("none") != 0 || InParameters->DrainUseVar || InParameters->DetermineMinimalMedia) {
 		InParameters->DecomposeDrain = true;
 	}
 	if (InParameters->IntervalOptimization || InParameters->GeneOptimization || GetParameter("Add regulatory constraint to problem").compare("1") == 0) {
@@ -1565,29 +1619,14 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 	}
 	if (InParameters->GeneConstraints) {
 		InParameters->AllReactionsUse = true;
+		InParameters->ReactionsUse = true;
 		// Require the reaction to have some minimum flux in order for the reaction use variable to have a value of 1
 		SetParameter("Add positive use variable constraints", "1");
 		// Use the value specified by user.
 		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
-	if (InParameters->GeneConstraints || InParameters->ThermoConstraints || (InParameters->LoadForeignDB && InParameters->MinimizeForeignReactions)) {
-		InParameters->ReactionsUse = true;
-	}
-	if (InParameters->ReactionsUse) {
+	if (InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		InParameters->DecomposeReversible = true;
-	}
-	if (InParameters->DrainUseVar) {
-		InParameters->DecomposeDrain = true;
-	}
-	if (InParameters->DoMinimizeFlux) {
-		InParameters->DecomposeReversible = true;
-	}
-	if (InParameters->DetermineMinimalMedia) {
-		InParameters->DecomposeDrain = true;
-		InParameters->AllDrainUse = true;
-		InParameters->DrainUseVar = true;
-		InParameters->MaxDrainFlux = 10000;
-		InParameters->MinDrainFlux = -10000;
 	}
 }
 
@@ -2221,7 +2260,21 @@ string GetMFAVariableName(MFAVariable* InVariable) {
 	} else if (InType == GENE_UNUSE) {
 		TypeName.assign("GUU");	
 	} else if (InType == REACTION_CONSTRAINT) {
-		TypeName.assign("RC");			
+		TypeName.assign("RC");
+	} else if (InType == REACTION_SLACK) {
+		TypeName.assign("RS");
+	} else if (InType == SUBUNIT_EXP) {
+		TypeName.assign("SE");
+	} else if (InType == COMPLEX_EXP) {
+		TypeName.assign("CE");
+	} else if (InType == GENE_EXP) {
+		TypeName.assign("GE");
+	} else if (InType == FORWARD_REACTION) {
+		TypeName.assign("FR");
+	} else if (InType == POSITIVE_DELTAG) {
+		TypeName.assign("PDG");
+	} else if (InType == NEGATIVE_DELTAG) {
+		TypeName.assign("NDG");
 	} else {
 		FErrorFile() << "Unrecognized MFA variable type number: " << InType << endl;
 		FlushErrorFile();

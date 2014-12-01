@@ -196,6 +196,7 @@ public:
 	//Metabolic flux analysis functions
 	double ComputePROMActivity();
 	void CreateReactionDrainFluxes();
+	void DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InProblem);
 	void CreateMFAVariables(OptimizationParameter* InParameters);
 	void BuildReactionConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem);
 	void UpdateBounds(int VarType, double Min, double Max, bool ApplyToMinMax = false);

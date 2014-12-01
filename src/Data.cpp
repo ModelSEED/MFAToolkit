@@ -255,7 +255,7 @@ void Data::LoadPROMModel(string Filename) {
 				if (TFGene == NULL) {
 					TFGene = this->AddGene((*GeneDataStrings)[0]);
 				}
-				CurrentGene->AddStimuli((*GeneDataStrings)[0].data(),TFGene,NULL,GENE_TFS,false,0,atof((*GeneDataStrings)[1].data()),atof((*GeneDataStrings)[2].data()));
+				CurrentGene->AddStimuli((*GeneDataStrings)[0].data(),TFGene,NULL,GENE_TFS,false,0,atof((*GeneDataStrings)[2].data()),atof((*GeneDataStrings)[1].data()));
 			}
 		}
 	}
@@ -1229,14 +1229,6 @@ void Data::PerformMFA() {
 	//Creating MFA problem object
 	MFAProblem* NewProblem = new MFAProblem();
 
-	//Running the gap generation
-	if (GetParameter("Perform gap generation").compare("1") == 0) {
-		NewProblem->GapGeneration(this,NewParameters);
-		ClearParameters(NewParameters);
-		delete NewProblem;
-		return;
-	}
-
 	//Running the solution reconciliation
 	if (GetParameter("Perform solution reconciliation").compare("1") == 0) {
 		NewProblem->SolutionReconciliation(this,NewParameters);
@@ -1252,143 +1244,20 @@ void Data::PerformMFA() {
 		return;
 	}
 
-	//Do soft constraint, then report flux.
-	if (GetParameter("Soft Constraint").length() > 0 && GetParameter("Soft Constraint").compare("NONE") != 0) {
-		NewProblem->SoftConstraint(this);
-		delete NewProblem;
-		return;
-	}
-
 	if (GetParameter("Gene Activity State").length() > 0 && GetParameter("Gene Activity State").compare("NONE") != 0) {
 		NewProblem->FitGeneActivtyState(this);
 		delete NewProblem;
 		return;
 	}
-
-
 	//Generating pathways to objective
 	if (GetParameter("Generate pathways to objective").compare("1") == 0) {
 		NewProblem->GenerateMinimalReactionLists(this);
 		delete NewProblem;
 		return;
-	}	
-
-	//Running the gap filling
-	if (GetParameter("Perform gap filling").compare("1") == 0) {
-		//Writing the header to the gap filling solution table
-		if (!FileExists(FOutputFilepath()+"GapFillingSolutionTable.txt")) {
-			ofstream Output;
-			OpenOutput(Output,FOutputFilepath()+"GapFillingSolutionTable.txt");
-			Output << "Experiment;Solution index;Solution cost;Solution reactions" << endl;
-			Output.close();
-			Output.clear();
-			OpenOutput(Output,FOutputFilepath()+"GapFillingReport.txt");
-			Output << "Run label;Number of solutions;SolutionCosts;Solutions;media;reaction KO" << endl;
-			Output.close();
-		}
-		SetParameter("Reactions knocked out in gap filling","none");
-		
-		//Running the gap filling algorithm
-		if (GetParameter("Complete gap filling").compare("1") == 0) {
-			NewProblem->CompleteGapFilling(this,NewParameters,GetParameter("Fast gap filling").compare("1") == 0);
-			ClearParameters(NewParameters);
-			delete NewProblem;
-		} else if (GetParameter("Gap filling runs").compare("none") == 0) {
-			NewProblem->GapFilling(this,NewParameters);
-			ClearParameters(NewParameters);
-			delete NewProblem;
-		} else {
-			vector<string>* Runs = StringToStrings(GetParameter("Gap filling runs"),";");
-			vector<string> OriginalKOReaction = NewParameters->KOReactions;
-			for (int i =0; i < int(Runs->size()); i++) {
-				//Parsing run specification into label, media, and reaction list
-				vector<string>* RunData = StringToStrings((*Runs)[i],":");
-				vector<string>* ReactionList = StringToStrings((*RunData)[2],",");
-				//Setting the media
-				SetParameter("Reactions knocked out in gap filling",(*RunData)[2].data());
-				NewParameters->UserBounds = ReadBounds((*RunData)[1].data());
-				if (NewParameters->UserBounds != NULL) {
-					for (int j=0; j < int(ReactionList->size()); j++) {
-						if ((*ReactionList)[j].compare("none") != 0 && FindReaction("DATABASE",(*ReactionList)[j].data()) != NULL) {
-							NewParameters->KOReactions.push_back((*ReactionList)[j]);
-						}
-					}
-					//Running the gap filling
-					NewProblem->GapFilling(this,NewParameters,(*RunData)[0]);
-					//Deleting the vectors
-					delete ReactionList;
-					delete RunData;
-					//Restoring the KO list
-					NewParameters->KOReactions = OriginalKOReaction;
-				} else {
-					FErrorFile() << "Could not load media " << (*RunData)[1] << endl;
-					FlushErrorFile();
-				}
-			}
-			ClearParameters(NewParameters);
-			delete NewProblem;
-			delete Runs;
-		}
-		return;
 	}
-	//Building MFA object based on user settings and database
-	NewProblem->BuildMFAProblem(this,NewParameters);
-
-	double ObjectiveValue = FLAG;
-	if (GetParameter("run media experiments").compare("1") == 0) {
-		NewProblem->RunMediaExperiments(this,NewParameters,ObjectiveValue,GetParameter("maximize single objective").compare("1") == 0,GetParameter("find tight bounds").compare("1") == 0,GetParameter("Minimize the number of foreign reactions").compare("1") == 0,GetParameter("maximize individual metabolite production").compare("1") == 0);	
-		ClearParameters(NewParameters);
-		delete NewProblem;
-		return;
-	}
-
-	if (NewParameters->DoRecursiveMILPStudy && GetParameter("maximize single objective").compare("1") != 0) {
-		NewProblem->RecursiveMILPStudy(this,NewParameters,false);
-	}
-
-	if (GetParameter("identify type 3 pathways").compare("1") == 0) {
-		NewProblem->IdentifyReactionLoops(this,NewParameters);
-	}
-	
-	if (GetParameter("maximize single objective").compare("1") == 0) {
-		string Note;
-		NewParameters->RelaxIntegerVariables = (GetParameter("relax integer variables when possible").compare("1") == 0);
-		NewProblem->OptimizeSingleObjective(this,NewParameters,GetParameter("objective"),GetParameter("find tight bounds").compare("1") == 0,GetParameter("Minimize the number of foreign reactions").compare("1") == 0,ObjectiveValue,Note);	
-	}
-
 	if (GetParameter("new fba pipeline").compare("1") == 0) {
 		NewProblem->FluxBalanceAnalysisMasterPipeline(this,NewParameters);
 	}
-
-	if (GetParameter("run reaction addition experiments").compare("1") == 0) {
-		NewProblem->OptimizeIndividualForeignReactions(this,NewParameters,GetParameter("find tight bounds").compare("1") == 0,GetParameter("maximize individual metabolite production").compare("1") == 0);
-	}
-
-	if (GetParameter("maximize single objective").compare("1") == 0 && GetParameter("run exploration experiments").compare("1") == 0) {
-		NewProblem->ExploreSplittingRatios(this,NewParameters,GetParameter("find tight bounds").compare("1") == 0,GetParameter("Minimize the number of foreign reactions").compare("1") == 0);	
-	}
-
-	//Finding tight bounds if the user has requested
-	if (GetParameter("find tight bounds").compare("1") == 0 && GetParameter("maximize single objective").compare("1") != 0) {
-		string Note;
-		NewProblem->FindTightBounds(this,NewParameters,Note);
-	}
-
-	if (NewParameters->DoFluxCouplingAnalysis && GetParameter("run media experiments").compare("1") != 0 && GetParameter("maximize single objective").compare("1") != 0) {
-		string Note;
-		NewProblem->FluxCouplingAnalysis(this,NewParameters,true,Note,false);
-	}
-
-	if (GetParameter("maximize individual metabolite production").compare("1") == 0) {
-		string Note;
-		NewProblem->CheckIndividualMetaboliteProduction(this,NewParameters,GetParameter("metabolites to optimize"),GetParameter("find tight bounds").compare("1") == 0,GetParameter("Minimize the number of foreign reactions").compare("1") == 0,Note,false);
-	}
-
-	if (GetParameter("optimize individual foreign reactions").compare("1") == 0 && GetParameter("Load foreign reaction database").compare("1") == 0) {
-		string Note;
-		NewProblem->OptimizeIndividualForeignReactions(this,NewParameters,GetParameter("find tight bounds").compare("1") == 0,GetParameter("maximize individual metabolite production").compare("1") == 0);
-	}
-	//Clearing memmory
 	ClearParameters(NewParameters);
 	delete NewProblem;
 }

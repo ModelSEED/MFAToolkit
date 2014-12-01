@@ -644,20 +644,19 @@ void Reaction::SetReactantCompartment(int reactant,int compartment) {
 }
 
 void Reaction::SetComplexes(string InComplexes) {
-	vector<vector<vector<Gene*> > > gprdata;
 	vector<string>* complexes = StringToStrings(InComplexes,"&");
 	for (int i=0; i < complexes->size(); i++) {
 		vector<vector<Gene*> > complex_genes;
-		gprdata.push_back(complex_genes);
 		vector<string>* subunits = StringToStrings((*complexes)[i].data(),"+");
 		for (int j=0; j < subunits->size(); j++) {
 			vector<Gene*> genes;
-			complex_genes.push_back(genes);
 			vector<string>* features = StringToStrings((*subunits)[j],"=");
 			for (int k=0; k < features->size(); k++) {
 				genes.push_back(this->FMainData()->FindGene("DATABASE",(*features)[k].data()));
 			}
+			complex_genes.push_back(genes);
 		}
+		gprdata.push_back(complex_genes);
 	}
 }
 
@@ -2862,6 +2861,9 @@ int Reaction::FPathwayLength() {
 
 //Metabolic flux analysis functions
 double Reaction::ComputePROMActivity() {
+	if (gprdata.size() == 0) {
+		return 1;
+	}
 	double bestscore = 0;
 	for (int i=0; i < int(gprdata.size()); i++) {
 		double worstscore = 1;
@@ -2900,77 +2902,111 @@ void Reaction::CreateReactionDrainFluxes() {
 	}
 }
 
+void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InProblem) {
+	int types[3] = {FORWARD_FLUX,REVERSE_FLUX,FLUX};
+	int cortypes[3] = {FORWARD_USE,REVERSE_USE,REACTION_USE};
+	map<int,vector<MFAVariable*> > newvariables;
+	for (int i=0; i < 3; i++) {
+		MFAVariable* newvar = this->GetMFAVar(types[i]);
+		MFAVariable* newusevar = this->GetMFAVar(cortypes[i]);
+		if (newvar != NULL && newvar->Max > MFA_ZERO_TOLERANCE) {
+			double max = newvar->Max;
+			newvar->UpperBound = max/2;
+			int count = 1;
+			vector<MFAVariable*> variables;
+			variables.push_back(newvar);
+			while(newvar->UpperBound < threshold && count < 5) {
+				newvar = CloneVariable(newvar);
+				newusevar = CloneVariable(newusevar);
+				newvariables[types[i]].push_back(newvar);
+				newvariables[cortypes[i]].push_back(newusevar);
+				newvar->UpperBound = max/2;
+				InProblem->AddVariable(newvar);
+				InProblem->AddVariable(newusevar);
+			}
+		}
+	}
+
+}
+
 void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 	MFAVariable* NewVariable = NULL;
+	vector<int> fluxvars;
+	vector<int> usevars;
 	if (InParameters->MassBalanceConstraints) {
-		if (!FMark()) {
-			if ((Type == REVERSIBLE || InParameters->AllReversible) && GetData("DATABASE",STRING).substr(0,3).compare("bio") != 0 && GetData("NAME",STRING).compare("Biomass") != 0 && GetData("FOREIGN",STRING).compare("BiomassRxn") != 0) {
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				if (InParameters->DecomposeReversible) {
-					NewVariable->Type = FORWARD_FLUX;
-					MFAVariables[FORWARD_FLUX] = NewVariable;
-					if (InParameters->MaxFlux > 0) {
-						NewVariable->UpperBound = InParameters->MaxFlux;
-					}
-					if (InParameters->MinFlux < 0) {
-						NewVariable->LowerBound = 0;
-					} else {
-						NewVariable->LowerBound = InParameters->MinFlux;
-					}
-					NewVariable = InitializeMFAVariable();
-					NewVariable->Name = GetData("DATABASE",STRING);
-					NewVariable->AssociatedReaction = this;
-					NewVariable->Type = REVERSE_FLUX;
-					MFAVariables[REVERSE_FLUX] = NewVariable;
-					if (InParameters->MaxFlux < 0) {
-						NewVariable->LowerBound = -InParameters->MaxFlux;
-					} else {
-						NewVariable->LowerBound = 0;
-					}
-					if (InParameters->MinFlux < 0) {
-						NewVariable->UpperBound = -InParameters->MinFlux;
-					}
-				} else {
-					NewVariable->Type = FLUX;
-					MFAVariables[FLUX] = NewVariable;
-					NewVariable->UpperBound = InParameters->MaxFlux;
-					NewVariable->LowerBound = InParameters->MinFlux;
-				}
-			} else if (Type == FORWARD || GetData("NAME",STRING).compare("Biomass") == 0) {
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				NewVariable->Type = FLUX;
-				MFAVariables[FLUX] = NewVariable;
+		if ((Type == REVERSIBLE || InParameters->AllReversible) && GetData("DATABASE",STRING).substr(0,3).compare("bio") != 0 && GetData("NAME",STRING).compare("Biomass") != 0 && GetData("FOREIGN",STRING).compare("BiomassRxn") != 0) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			if (InParameters->DecomposeReversible) {
+				NewVariable->Type = FORWARD_FLUX;
+				fluxvars.push_back(FORWARD_FLUX);
+				usevars.push_back(FORWARD_USE);
+				MFAVariables[FORWARD_FLUX] = NewVariable;
 				NewVariable->UpperBound = InParameters->MaxFlux;
 				NewVariable->LowerBound = 0;
-			} else if (Type == REVERSE) {
 				NewVariable = InitializeMFAVariable();
 				NewVariable->Name = GetData("DATABASE",STRING);
 				NewVariable->AssociatedReaction = this;
-				if (InParameters->DecomposeReversible) {
-					NewVariable->Type = REVERSE_FLUX;
-					MFAVariables[REVERSE_FLUX] = NewVariable;
-					if (InParameters->MaxFlux < 0) {
-						NewVariable->LowerBound = -InParameters->MaxFlux;
-					} else {
-						NewVariable->LowerBound = 0;
-					}
-					if (InParameters->MinFlux < 0) {
-						NewVariable->UpperBound = -InParameters->MinFlux;
-					}
-				} else {
-					NewVariable->Type = FLUX;
-					MFAVariables[FLUX] = NewVariable;
-					NewVariable->UpperBound = 0;
-					NewVariable->LowerBound = InParameters->MinFlux;
-				}
+				NewVariable->Type = REVERSE_FLUX;
+				fluxvars.push_back(REVERSE_FLUX);
+				usevars.push_back(REVERSE_USE);
+				MFAVariables[REVERSE_FLUX] = NewVariable;
+				NewVariable->LowerBound = 0;
+				NewVariable->UpperBound = InParameters->MaxFlux;
+			} else {
+				NewVariable->Type = FLUX;
+				fluxvars.push_back(FLUX);
+				usevars.push_back(REACTION_USE);
+				MFAVariables[FLUX] = NewVariable;
+				NewVariable->UpperBound = InParameters->MaxFlux;
+				NewVariable->LowerBound = -InParameters->MaxFlux;
+			}
+		} else if (Type == FORWARD || GetData("NAME",STRING).compare("Biomass") == 0) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			NewVariable->Type = FLUX;
+			fluxvars.push_back(FLUX);
+			usevars.push_back(REACTION_USE);
+			MFAVariables[FLUX] = NewVariable;
+			NewVariable->UpperBound = InParameters->MaxFlux;
+			NewVariable->LowerBound = 0;
+		} else if (Type == REVERSE) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			if (InParameters->DecomposeReversible) {
+				NewVariable->Type = REVERSE_FLUX;
+				MFAVariables[REVERSE_FLUX] = NewVariable;
+				fluxvars.push_back(REVERSE_FLUX);
+				usevars.push_back(REVERSE_USE);
+				NewVariable->UpperBound = InParameters->MaxFlux;
+				NewVariable->LowerBound = 0;
+			} else {
+				NewVariable->Type = FLUX;
+				MFAVariables[FLUX] = NewVariable;
+				fluxvars.push_back(FLUX);
+				usevars.push_back(REACTION_USE);
+				NewVariable->UpperBound = 0;
+				NewVariable->LowerBound = -InParameters->MaxFlux;
 			}
 		}
 	}
 	
+	if (InParameters->ReactionsUse) {
+		for (int i=0; i < int(usevars.size()); i++) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			NewVariable->Type = usevars[i];
+			MFAVariables[usevars[i]] = NewVariable;
+			NewVariable->UpperBound = 1;
+			NewVariable->LowerBound = 0;
+			NewVariable->Binary = true;
+		}
+	}
+
 	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		//Creating the delta G variable
 		NewVariable = InitializeMFAVariable();
@@ -3000,14 +3036,26 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 	}
 
 	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
-		NewVariable = InitializeMFAVariable();
-		NewVariable->Name = GetData("DATABASE",STRING);
-		NewVariable->AssociatedReaction = this;
-		NewVariable->Type = REACTION_SLACK;
-		MFAVariables[REACTION_SLACK] = NewVariable;
-		NewVariable->LowerBound = 0;
-		NewVariable->UpperBound = 1;
-		NewVariable->Binary = InParameters->BinaryReactionSlackVariable;
+		if (this->GetData("FOREIGN",STRING).length() == 0) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			NewVariable->Type = REACTION_SLACK;
+			MFAVariables[REACTION_SLACK] = NewVariable;
+			NewVariable->LowerBound = 0;
+			NewVariable->UpperBound = 1;
+			NewVariable->Binary = InParameters->BinaryReactionSlackVariable;
+			if (!InParameters->ThermoConstraints && !InParameters->SimpleThermoConstraints && this->FType() == REVERSIBLE) {
+				NewVariable = InitializeMFAVariable();
+				NewVariable->Name = GetData("DATABASE",STRING);
+				NewVariable->AssociatedReaction = this;
+				NewVariable->Type = FORWARD_REACTION;
+				MFAVariables[FORWARD_REACTION] = NewVariable;
+				NewVariable->LowerBound = 0;
+				NewVariable->UpperBound = 1;
+				NewVariable->Binary = true;
+			}
+		}
 	}
 
 	if (InParameters->SingleRxnUse) {
@@ -3041,6 +3089,22 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 }
 
 void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem) {
+	if (InParameters->ReactionsUse) {
+		int vartypes[3] = {FLUX,FORWARD_FLUX,REVERSE_FLUX};
+		int corrvartypes[3] = {REACTION_USE,FORWARD_USE,REVERSE_USE};
+		for (int i=0; i < 3; i++) {
+			MFAVariable* FluxVar = MFAVariables[vartypes[i]];
+			MFAVariable* UseVar = MFAVariables[vartypes[i]];
+			if (FluxVar != NULL || UseVar != NULL) {
+				LinEquation* NewConstraint = InitializeLinEquation("Reaction use constraint",0,LESS);
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Variables.push_back(FluxVar);
+				NewConstraint->Coefficient.push_back(-1*FluxVar->UpperBound);
+				NewConstraint->Variables.push_back(UseVar);
+			}
+		}
+	}
+
 	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		LinEquation* NewConstraint = InitializeLinEquation("Gibbs energy constraint",0,EQUAL);
 		NewConstraint->AssociatedReaction = this;
@@ -3053,6 +3117,23 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 			NewConstraint->Variables.push_back(this->GetReactant(j)->GetMFAVar(POTENTIAL,this->GetReactantCompartment(j)));
 		}
 		InProblem->AddConstraint(NewConstraint);
+
+		NewConstraint = InitializeLinEquation("Gibbs energy forward binary constraint",0,LESS);
+		NewConstraint->AssociatedReaction = this;
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Variables.push_back(this->GetMFAVar(NEGATIVE_DELTAG));
+		NewConstraint->Coefficient.push_back(-10000);
+		NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+		InProblem->AddConstraint(NewConstraint);
+
+		NewConstraint = InitializeLinEquation("Gibbs energy reverse binary constraint",10000,LESS);
+		NewConstraint->AssociatedReaction = this;
+		NewConstraint->Coefficient.push_back(1);
+		NewConstraint->Variables.push_back(this->GetMFAVar(POSITIVE_DELTAG));
+		NewConstraint->Coefficient.push_back(10000);
+		NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+		InProblem->AddConstraint(NewConstraint);
+
 		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
 		if (fluxvar == NULL) {
 			fluxvar = this->GetMFAVar(FLUX);
@@ -3065,15 +3146,8 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 			NewConstraint->Coefficient.push_back(1);
 			NewConstraint->Variables.push_back(fluxvar);
 			InProblem->AddConstraint(NewConstraint);
-
-			NewConstraint = InitializeLinEquation("Gibbs energy forward binary constraint",0,LESS);
-			NewConstraint->AssociatedReaction = this;
-			NewConstraint->Coefficient.push_back(1);
-			NewConstraint->Variables.push_back(this->GetMFAVar(NEGATIVE_DELTAG));
-			NewConstraint->Coefficient.push_back(-10000);
-			NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
-			InProblem->AddConstraint(NewConstraint);
 		}
+
 		fluxvar = this->GetMFAVar(REVERSE_FLUX);
 		if (fluxvar != NULL) {
 			NewConstraint = InitializeLinEquation("Gibbs energy reverse flux constraint",0,LESS);
@@ -3083,42 +3157,58 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 			NewConstraint->Coefficient.push_back(1);
 			NewConstraint->Variables.push_back(fluxvar);
 			InProblem->AddConstraint(NewConstraint);
-
-			NewConstraint = InitializeLinEquation("Gibbs energy reverse binary constraint",10000,LESS);
-			NewConstraint->AssociatedReaction = this;
-			NewConstraint->Coefficient.push_back(1);
-			NewConstraint->Variables.push_back(this->GetMFAVar(POSITIVE_DELTAG));
-			NewConstraint->Coefficient.push_back(10000);
-			NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
-			InProblem->AddConstraint(NewConstraint);
 		}
 	}
 
 	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
-		LinEquation* NewConstraint = InitializeLinEquation("Reaction slack constraint",1,GREATER);
-		NewConstraint->AssociatedReaction = this;
-		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
-		if (fluxvar == NULL) {
-			fluxvar = this->GetMFAVar(FLUX);
+		if (this->GetData("FOREIGN",STRING).length() == 0) {
+			LinEquation* NewConstraint = InitializeLinEquation("Reaction slack constraint",1,GREATER);
+			NewConstraint->AssociatedReaction = this;
+			MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+			if (fluxvar == NULL) {
+				fluxvar = this->GetMFAVar(FLUX);
+			}
+			if (fluxvar != NULL) {
+				NewConstraint->Coefficient.push_back(1000);
+				NewConstraint->Variables.push_back(fluxvar);
+			}
+			fluxvar = this->GetMFAVar(REVERSE_FLUX);
+			if (fluxvar != NULL) {
+				NewConstraint->Coefficient.push_back(1000);
+				NewConstraint->Variables.push_back(fluxvar);
+			}
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(this->GetMFAVar(REACTION_SLACK));
+			InProblem->AddConstraint(NewConstraint);
+			if (!InParameters->ThermoConstraints && !InParameters->SimpleThermoConstraints && this->FType() == REVERSIBLE) {
+				LinEquation* NewConstraint = InitializeLinEquation("Associating forward flux to FORWARD_REACTION",0,LESS);
+				NewConstraint->AssociatedReaction = this;
+				MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+				if (fluxvar != NULL) {
+					NewConstraint->Coefficient.push_back(1);
+					NewConstraint->Variables.push_back(fluxvar);
+				}
+				NewConstraint->Coefficient.push_back(-10000);
+				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+				InProblem->AddConstraint(NewConstraint);
+				NewConstraint = InitializeLinEquation("Associating reverse flux to FORWARD_REACTION",10000,LESS);
+				NewConstraint->AssociatedReaction = this;
+				fluxvar = this->GetMFAVar(REVERSE_FLUX);
+				if (fluxvar != NULL) {
+					NewConstraint->Coefficient.push_back(1);
+					NewConstraint->Variables.push_back(fluxvar);
+				}
+				NewConstraint->Coefficient.push_back(10000);
+				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+				InProblem->AddConstraint(NewConstraint);
+			}
 		}
-		if (fluxvar != NULL) {
-			NewConstraint->Coefficient.push_back(1000);
-			NewConstraint->Variables.push_back(fluxvar);
-		}
-		fluxvar = this->GetMFAVar(REVERSE_FLUX);
-		if (fluxvar != NULL) {
-			NewConstraint->Coefficient.push_back(1000);
-			NewConstraint->Variables.push_back(fluxvar);
-		}
-		NewConstraint->Coefficient.push_back(1);
-		NewConstraint->Variables.push_back(this->GetMFAVar(REACTION_SLACK));
-		InProblem->AddConstraint(NewConstraint);
 	}
 
 	if (InParameters->SingleRxnUse) {
 		LinEquation* NewConstraint = InitializeLinEquation("Single use variable constraint",0,GREATER);
 		NewConstraint->Coefficient.push_back(1000);
-		NewConstraint->Variables.push_back(REACTION_USE);
+		NewConstraint->Variables.push_back(this->GetMFAVar(REACTION_USE));
 		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
 		if (fluxvar == NULL) {
 			fluxvar = this->GetMFAVar(FLUX);

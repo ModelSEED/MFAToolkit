@@ -276,6 +276,13 @@ struct FileBounds {
 };
 
 struct OptimizationParameter {
+	double omega;
+	double alpha;
+	double MinFluxMultiplier;
+	bool ScalePenaltyByFlux;
+	bool SingleRxnUse;
+	bool BinaryReactionSlackVariable;
+	bool ReactionSlackVariable;
 	bool PROM;
 	bool TranscriptomeAnalysis;
 	bool PhenotypeAnalysis;
@@ -336,7 +343,6 @@ struct OptimizationParameter {
 
 	double Temperature;
 	double MaxFlux;
-	double MinFlux;
 	double MaxPotential;
 	double MaxDeltaG;
 	double MaxDrainFlux;
@@ -346,11 +352,13 @@ struct OptimizationParameter {
 	int SolutionSizeInterval;
 	int RecursiveMILPSolutionLimit;
 	int ErrorMult;
+	int NumSolutions;
 	
 	int DefaultExchangeComp;
 	vector<int> RecursiveMILPTypes;
 	vector<string> ExchangeSpecies;
 	vector<string> UnremovableMedia;
+	vector<string> GapfillingTargetReactions;
 	vector<int> ExchangeComp;
 	vector<double> ExchangeMax;
 	vector<double> ExchangeMin;
@@ -360,7 +368,7 @@ struct OptimizationParameter {
 	vector<double> ExplorationMin;
 	vector<double> ExplorationMax;
 	vector<double> ExplorationIteration;
-	vector<vector<string> > TargetReactions;
+	vector<vector<string> > CoessentialityTargetReactions;
 	vector<vector<string> > UnviableIntervalCombinations;
 	//FBA experiment sets
 	vector<vector<string> > KOSets;

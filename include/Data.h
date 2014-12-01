@@ -66,7 +66,7 @@ public:
 	//File input
 	int LoadSystem(string Filename, bool StructCues = false);
 	int LoadStructuralCues();
-	int LoadPROMModel(string Filename);
+	void LoadPROMModel(string Filename);
 
 	//Input
 	Species* AddSpecies(string Filename);

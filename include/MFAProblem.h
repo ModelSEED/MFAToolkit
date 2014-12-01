@@ -131,7 +131,7 @@ public:
 	void ProcessSolution(OptSolutionData* InSolution);
 	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters, bool SaveSolution, bool UseSpecifiedSearchTypes = false);
 	int FindTightBounds(Data* InData,OptimizationParameter*& InParameters,string Note);
-	int AlternativeSolutionExploration(OptimizationParameter* InParameters,string Filename);
+	int AlternativeSolutionExploration(OptimizationParameter* InParameters,string Filename,OptSolutionData* InitialSolution = NULL,bool clearmarks = true);
 	int RecursiveMILP(Data* InData,OptimizationParameter*& InParameters, vector<int> VariableTypes,bool PrintSolutions);
 	vector<OptSolutionData*> RecursiveMILP(OptimizationParameter* InParameters, string ProblemNote,bool ForeignOnly,vector<int> VariableTypes,double MinSolution,int ClockIndex,LinEquation* OriginalObjective);
 	int CheckIndividualMetaboliteProduction(Data* InData, OptimizationParameter* InParameters, vector<Species*> Metabolites, vector<int> Compartments, bool FindTightBounds, bool MinimizeForeignReactions, bool MakeAllDrainsSimultaneously, string Note, bool SubProblem);
@@ -151,7 +151,7 @@ public:
 	int IdentifyReactionLoops(Data* InData, OptimizationParameter* InParameters);
 	int LoadBiomassDrainReactions(Data* InData, OptimizationParameter* InParameters);
 	int LoadGapFillingReactions(Data* InData, OptimizationParameter* InParameters);
-	int GapFilling(Data* InData, OptimizationParameter* InParameters, string Label = "NONE");
+	int GapFilling(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	int CompleteGapFilling(Data* InData, OptimizationParameter* InParameters,bool fastgapfill = false);
 	int CalculateGapfillCoefficients(Data* InData,OptimizationParameter* InParameters,map<string,Reaction*,std::less<string> > InactiveVar,map<MFAVariable*,double,std::less<MFAVariable*> >& VariableCoefficients,bool fastgapfill = false);
 	int GapGeneration(Data* InData, OptimizationParameter* InParameters);
@@ -167,12 +167,13 @@ public:
 	int CalculateFluxSensitivity(Data* InData,vector<MFAVariable*> variables,double objective);
 	double optimizeVariable(MFAVariable* currentVariable,bool maximize);
 	
-	int AddPROMConstraints(Data* InData, OptimizationParameter* InParameters);
+	int AddPROMConstraints(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	int LoadAdditionalReactions(Data* InData,OptimizationParameter* InParameters);
 	int BuildCoreProblem(Data* InData,OptimizationParameter*& InParameters);
 	int AddUptakeLimitConstraints();
 	int FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationParameter* InParameters);
 	int QuantitativeModelOptimization(Data* InData, OptimizationParameter* InParameters);
+	bool SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label);
 
 	//FBA extension studies
 	int CombinatorialKO(int maxDeletions,Data* InData, bool reactions);
