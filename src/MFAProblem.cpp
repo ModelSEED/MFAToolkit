@@ -2458,10 +2458,32 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 				}
 			}
 		}
+		MFAVariable* linkedvar = NULL;
+		if (GetVariable(i)->Mark && GetVariable(i)->Type == FORWARD_FLUX) {
+			for (int j=0; j < FNumVariables(); j++) {
+				if (GetVariable(i)->AssociatedReaction == GetVariable(j)->AssociatedReaction && GetVariable(j)->Type == REVERSE_FLUX) {
+					linkedvar = GetVariable(j);
+					break;
+				}
+			}
+		}
+		if (GetVariable(i)->Mark && GetVariable(i)->Type == REVERSE_FLUX) {
+			for (int j=0; j < FNumVariables(); j++) {
+				if (GetVariable(i)->AssociatedReaction == GetVariable(j)->AssociatedReaction && GetVariable(j)->Type == FORWARD_FLUX) {
+					GetVariable(i)->Mark = false;
+					break;
+				}
+			}
+		}
+
 		if (GetVariable(i)->Mark) {
 			OptSolutionData* NewSolution;
 			SetMin();
 			ObjFunct->Variables[0] = GetVariable(i);
+			if (linkedvar != NULL) {
+				ObjFunct->Variables.push_back(linkedvar);
+				ObjFunct->Coefficient.push_back(-1);
+			}
 			if (First) {
 				if (LoadSolver() != SUCCESS) {
 					return FAIL;	
@@ -2480,6 +2502,16 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 			} else {
 				GetVariable(i)->Min = FLAG;
 			}
+			if (linkedvar != NULL) {
+				if (GetVariable(i)->Min < 0) {
+					GetVariable(i)->Min = 0;
+					linkedvar->Min = 0;
+					linkedvar->Max = -GetVariable(i)->Min;
+				} else {
+					linkedvar->Min = 0;
+					linkedvar->Max = 0;
+				}
+			}
 
 			SetMax();
 			LoadObjective();
@@ -2491,6 +2523,17 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 				}
 			} else {
 				GetVariable(i)->Max = FLAG;
+			}
+			if (linkedvar != NULL) {
+				if (GetVariable(i)->Max < 0) {
+					GetVariable(i)->Max = 0;
+					GetVariable(i)->Min = 0;
+					linkedvar->Min = -GetVariable(i)->Max;
+				} else {
+					linkedvar->Min = 0;
+				}
+				ObjFunct->Variables.pop_back();
+				ObjFunct->Coefficient.pop_back();
 			}
 		}
 	}
@@ -4406,20 +4449,18 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
 	if (InParameters->PROM || InParameters->QuantitativeOptimization || ((InParameters->TranscriptomeAnalysis || InParameters->GapFilling) && InParameters->ScalePenaltyByFlux)) {
-		cout << "TEST!" << InParameters->ScalePenaltyByFlux << endl;
-		if (InParameters->ReactionsUse || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
-			ResetSolver();
-			if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
-				for (int i=0; i < Variables.size(); i++) {
-					if (Variables[i]->Type == FORWARD_REACTION) {
-						Variables[i]->UpperBound = CurrentSolution->SolutionData[Variables[i]->Index];
-						Variables[i]->LowerBound = CurrentSolution->SolutionData[Variables[i]->Index];
-					}
+		cout << "TEST1" << endl;
+		ResetSolver();
+		this->RelaxIntegerVariables = true;
+		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
+			for (int i=0; i < Variables.size(); i++) {
+				if (Variables[i]->Type == FORWARD_REACTION) {
+					Variables[i]->UpperBound = CurrentSolution->SolutionData[Variables[i]->Index];
+					Variables[i]->LowerBound = CurrentSolution->SolutionData[Variables[i]->Index];
 				}
 			}
-			this->RelaxIntegerVariables = true;
-			LoadSolver(false);
 		}
+		LoadSolver(false);
 		float originalrhs = ObjectiveConstraint->RightHandSide;
 		ObjectiveConstraint->RightHandSide = CurrentSolution->Objective;//Fixing objective at maximum value
 		LoadConstToSolver(ObjectiveConstraint->Index);
@@ -4445,19 +4486,18 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		if (sense == GREATER) {
 			this->SetMax();
 		}
-		if (InParameters->ReactionsUse || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
-			ResetSolver();
-			if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
-				for (int i=0; i < Variables.size(); i++) {
-					if (Variables[i]->Type == FORWARD_REACTION) {
-						Variables[i]->UpperBound = 1;
-						Variables[i]->LowerBound = 0;
-					}
+		ResetSolver();
+		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
+			for (int i=0; i < Variables.size(); i++) {
+				if (Variables[i]->Type == FORWARD_REACTION) {
+					Variables[i]->UpperBound = 1;
+					Variables[i]->LowerBound = 0;
 				}
 			}
-			this->RelaxIntegerVariables = false;
-			LoadSolver(false);
 		}
+		this->RelaxIntegerVariables = false;
+		LoadSolver(false);
+		cout << "TEST2" << endl;
 	}
 	if (InParameters->PROM) {
 		this->AddPROMConstraints(InData,InParameters,CurrentSolution);//Add the PROM constraints tightening bounds based on TF status

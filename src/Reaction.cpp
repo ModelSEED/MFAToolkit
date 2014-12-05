@@ -2907,6 +2907,7 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InPro
 	int cortypes[3] = {FORWARD_USE,REVERSE_USE,REACTION_USE};
 	map<int,vector<MFAVariable*> > newvariables;
 	for (int i=0; i < 3; i++) {
+		MFAVariable* originalvar = this->GetMFAVar(types[i]);
 		MFAVariable* newvar = this->GetMFAVar(types[i]);
 		MFAVariable* newusevar = this->GetMFAVar(cortypes[i]);
 		if (newvar != NULL && newvar->Max > MFA_ZERO_TOLERANCE) {
@@ -2923,10 +2924,30 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InPro
 				newvar->UpperBound = max/2;
 				InProblem->AddVariable(newvar);
 				InProblem->AddVariable(newusevar);
+				LinEquation* NewConstraint = InitializeLinEquation("Reaction use constraint",0,LESS);
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Variables.push_back(newvar);
+				NewConstraint->Coefficient.push_back(-1*newvar->UpperBound);
+				NewConstraint->Variables.push_back(newusevar);
+				InProblem->AddConstraint(NewConstraint);
+				for (int j=0; j < InProblem->FNumConstraints(); j++) {
+					LinEquation* NewConstraint = InProblem->GetConstraint(j);
+					if (InProblem->GetConstraint(j)->AssociatedReaction == this && InProblem->GetConstraint(j)->ConstraintMeaning.compare("Gibbs energy forward flux constraint") == 0) {
+						InProblem->GetConstraint(j)->Coefficient.push_back(1);
+						InProblem->GetConstraint(j)->Variables.push_back(newvar);
+					} else if (InProblem->GetConstraint(j)->AssociatedSpecies != NULL) {
+						for (int k=0; k < NewConstraint->Variables.size(); k++) {
+							if (NewConstraint->Variables[k] == originalvar) {
+								NewConstraint->Variables.push_back(newvar);
+								NewConstraint->Coefficient.push_back(NewConstraint->Coefficient[k]);
+								break;
+							}
+						}
+					}
+				}
 			}
 		}
 	}
-
 }
 
 void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
