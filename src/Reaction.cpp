@@ -2902,7 +2902,7 @@ void Reaction::CreateReactionDrainFluxes() {
 	}
 }
 
-void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InProblem) {
+void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAProblem* InProblem) {
 	int types[3] = {FORWARD_FLUX,REVERSE_FLUX,FLUX};
 	int cortypes[3] = {FORWARD_USE,REVERSE_USE,REACTION_USE};
 	map<int,vector<MFAVariable*> > newvariables;
@@ -2916,7 +2916,7 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InPro
 			int count = 1;
 			vector<MFAVariable*> variables;
 			variables.push_back(newvar);
-			while(newvar->UpperBound < threshold && count < 5) {
+			while(newvar->UpperBound > threshold && count < minimum) {
 				newvar = CloneVariable(newvar);
 				newusevar = CloneVariable(newusevar);
 				newvariables[types[i]].push_back(newvar);
@@ -2932,10 +2932,7 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,MFAProblem* InPro
 				InProblem->AddConstraint(NewConstraint);
 				for (int j=0; j < InProblem->FNumConstraints(); j++) {
 					LinEquation* NewConstraint = InProblem->GetConstraint(j);
-					if (InProblem->GetConstraint(j)->AssociatedReaction == this && InProblem->GetConstraint(j)->ConstraintMeaning.compare("Gibbs energy forward flux constraint") == 0) {
-						InProblem->GetConstraint(j)->Coefficient.push_back(1);
-						InProblem->GetConstraint(j)->Variables.push_back(newvar);
-					} else if (InProblem->GetConstraint(j)->AssociatedSpecies != NULL) {
+					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Reaction use constraint") != 0)
 						for (int k=0; k < NewConstraint->Variables.size(); k++) {
 							if (NewConstraint->Variables[k] == originalvar) {
 								NewConstraint->Variables.push_back(newvar);
@@ -3122,6 +3119,7 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 				NewConstraint->Variables.push_back(FluxVar);
 				NewConstraint->Coefficient.push_back(-1*FluxVar->UpperBound);
 				NewConstraint->Variables.push_back(UseVar);
+				InProblem->AddConstraint(NewConstraint);
 			}
 		}
 	}

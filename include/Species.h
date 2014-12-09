@@ -221,6 +221,8 @@ public:
 	void LabelAtoms();
 
 	//Metabolic flux analysis functions
+	void BuildSpeciesConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem);
+	void DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAProblem* InProblem);
 	void CreateMFAVariables(OptimizationParameter* InParameters);
 	MFAVariable* CreateMFAVariable(int InType,int InCompartment,double Min, double Max);
 	void UpdateBounds(int VarType, double Min, double Max, int Compartment = -1, bool ApplyToMinMax = false);

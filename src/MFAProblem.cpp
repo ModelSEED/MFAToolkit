@@ -4235,6 +4235,9 @@ int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParamete
 	for (int i=0; i < InData->FNumReactions(); i++) {
 		InData->GetReaction(i)->BuildReactionConstraints(InParameters,this);
 	}
+	for (int i=0; i < InData->FNumSpecies(); i++) {
+		InData->GetSpecies(i)->BuildSpeciesConstraints(InParameters,this);
+	}
 	//Now that all of the necessary variables exist, I can read in and add the special constraints
 	ApplyInputConstraints(InParameters->AddConstraints,InData);
 	//Now I add mass balance constraints
@@ -4497,7 +4500,6 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		}
 		this->RelaxIntegerVariables = false;
 		LoadSolver(false);
-		cout << "TEST2" << endl;
 	}
 	if (InParameters->PROM) {
 		this->AddPROMConstraints(InData,InParameters,CurrentSolution);//Add the PROM constraints tightening bounds based on TF status
@@ -8232,197 +8234,171 @@ int MFAProblem::GapGeneration(Data* InData, OptimizationParameter* InParameters)
 int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParameter* InParameters) {
 	//Determining max bound in min flux FVA
 	double maxbound;
+	float boundmult = atof(GetParameter("Quantopt fva bound multiplier").data());
 	for (int i=0; i < FNumVariables(); i++) {
 		if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX || GetVariable(i)->Type == FLUX)) {
+			GetVariable(i)->Max = boundmult*GetVariable(i)->Max;
 			if (GetVariable(i)->Max > maxbound) {
 				maxbound = GetVariable(i)->Max;
 			}
 		}
 	}
-	//Calculating flux range for quantitative optimization analysis
-	map<Reaction*,string> ReactionClasses;
-	map<Reaction*,float> ForwardReactionBounds;
-	map<Reaction*,float> ReverseReactionBounds;
-	float boundmult = atof(GetParameter("quantopt fva bound multiplier").data());
-	for (int i=0; i < FNumVariables(); i++) {
-		if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == FLUX)) {
-			if (GetVariable(i)->Max == 0) {
-				if (ReactionClasses.count(GetVariable(i)->AssociatedReaction) == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("b") == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("n") == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("p") == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+	//Adding biomass adjustment constraint
+	LinEquation* NewConstraint = InitializeLinEquation("Biomass adjustment constraint",0,EQUAL);
+	MFAVariable* biovar = ObjFunct->Variables[0];
+	vector<string>* ComponentReactions = StringToStrings(GetParameter("Biomass component coefficients"),";");
+	for (int i=0; i < int(ComponentReactions->size()); i++) {
+		vector<string>* ComponentReaction = StringToStrings((*ComponentReactions)[i],":");
+		if (ComponentReaction->size() == 2) {
+			Reaction* biorxn = InData->FindReaction("DATABASE",(*ComponentReaction)[0].data());
+			if (biorxn != NULL) {
+				double origmass = atof((*ComponentReaction)[1].data());
+				MFAVariable* var = biorxn->GetMFAVar(FORWARD_FLUX);
+				if (var != NULL) {
+					LinEquation* BoundConstraint = InitializeLinEquation("Biomass adjustment constraint",0,LESS);
+					BoundConstraint->Variables.push_back(var);
+					BoundConstraint->Variables.push_back(biovar);
+					BoundConstraint->Coefficient.push_back(1);
+					if ((*ComponentReaction)[0].compare("EnergyBiomass") == 0) {
+						BoundConstraint->Coefficient.push_back(-2*origmass);
+					} else {
+						BoundConstraint->Coefficient.push_back(-1*(0.9-origmass));
+						NewConstraint->Variables.push_back(var);
+						NewConstraint->Coefficient.push_back(1);
+					}
+					this->AddConstraint(BoundConstraint);
 				}
-			} else {
-				ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = boundmult*GetVariable(i)->Max;
+				var = biorxn->GetMFAVar(REVERSE_FLUX);
+				if (var != NULL) {
+					LinEquation* BoundConstraint = InitializeLinEquation("Biomass adjustment constraint",0,LESS);
+					BoundConstraint->Variables.push_back(var);
+					BoundConstraint->Variables.push_back(biovar);
+					BoundConstraint->Coefficient.push_back(1);
+					if ((*ComponentReaction)[0].compare("EnergyBiomass") == 0) {
+						BoundConstraint->Coefficient.push_back(-0.8*origmass);
+					} else {
+						BoundConstraint->Coefficient.push_back(-1*(origmass-0.05));
+						NewConstraint->Variables.push_back(var);
+						NewConstraint->Coefficient.push_back(-1);
+					}
+					this->AddConstraint(BoundConstraint);
+				}
 			}
-		} else if (GetVariable(i)->AssociatedReaction != NULL && GetVariable(i)->Type == REVERSE_FLUX) {
-			if (GetVariable(i)->Max == 0) {
-				if (ReactionClasses.count(GetVariable(i)->AssociatedReaction) == 0) {
-					ReverseReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("b") == 0) {
-					ReverseReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("n") == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = 0;
-				} else if (ReactionClasses[GetVariable(i)->AssociatedReaction].compare("p") == 0) {
-					ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = maxbound;
+		}
+		delete ComponentReaction;
+	}
+	delete ComponentReactions;
+	this->AddConstraint(NewConstraint);
+	//Decomposing fluxes into multiple bound levels
+	for (int i=0; i < InData->FNumReactions(); i++) {
+		InData->GetReaction(i)->DecomposeToPiecewiseFluxBounds(atof(GetParameter("Quantopt threshold").data()),atoi(GetParameter("Quantopt minimum variables").data()),this);
+	}
+	//Decomposing fluxes into multiple bound levels
+	for (int i=0; i < InData->FNumSpecies(); i++) {
+		InData->GetSpecies(i)->DecomposeToPiecewiseFluxBounds(atof(GetParameter("Quantopt threshold").data()),atoi(GetParameter("Quantopt minimum variables").data()),this);
+	}
+	//Building full objective function: normal objective - 0.000001 * sum of fluxes
+	float minfluxcoef = atof(GetParameter("QuantOpt min flux coefficient").data());
+	this->AddSumObjective(FLUX,false,true,-1*minfluxcoef,false);
+	this->AddSumObjective(FORWARD_FLUX,false,true,-1*minfluxcoef,false);
+	this->AddSumObjective(REVERSE_FLUX,false,true,-1*minfluxcoef,false);
+	//Building the dual problem
+	MFAProblem* NewProblem = new MFAProblem();
+	NewProblem->BuildDualMFAProblem(this,InData,InParameters);
+	ResetIndecies();
+	//Adding dual constraints and variables
+	for (int i=0; i < NewProblem->FNumConstraints(); i++) {
+		AddConstraint(NewProblem->GetConstraint(i));
+	}
+	for (int i=0; i < NewProblem->FNumVariables(); i++) {
+		if (NewProblem->GetVariable(i)->Binary == false) {
+			AddVariable(NewProblem->GetVariable(i));
+		}
+	}
+	//Creating a constraint setting the dual objective equal to the primal objective
+	LinEquation* NewConstraint = InitializeLinEquation();
+	for (int i=0; i < int(GetObjective()->Variables.size()); i++) {
+		NewConstraint->Variables.push_back(GetObjective()->Variables[i]);
+		NewConstraint->Coefficient.push_back(GetObjective()->Coefficient[i]);
+	}
+	for (int i=0; i < int(NewProblem->GetObjective()->Variables.size()); i++) {
+		NewConstraint->Variables.push_back(NewProblem->GetObjective()->Variables[i]);
+		NewConstraint->Coefficient.push_back(-NewProblem->GetObjective()->Coefficient[i]);
+	}
+	NewConstraint->EqualityType = EQUAL;
+	NewConstraint->RightHandSide = 0;
+	NewConstraint->ConstraintMeaning = "Setting primal objective equal to dual objective";
+	AddConstraint(NewConstraint);
+	//Adding constraints supplied to quantopt
+	FileBounds* NewBounds = ReadBounds("QuantOptMedia");
+	int draintypes[3] = {FORWARD_DRAIN_FLUX,REVERSE_DRAIN_FLUX,DRAIN_FLUX};
+	int fluxtypes[3] = {FORWARD_FLUX,REVERSE_FLUX,FLUX};
+	for (int i=0; i < int(NewBounds->VarName.size()); i++) {
+		if (NewBounds->VarType[i] == DRAIN_FLUX) {
+			Species* ConstraintSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
+			if (ConstraintSpecies != NULL) {
+				for (int i=0; i < 3; i++) {
+					MFAVariable* drainvar = ConstraintSpecies->GetMFAVar(draintypes[i]);
+					if (drainvar != NULL) {
+						LinEquation* NewConstraint = InitializeLinEquation("Specification constraints",NewBounds->VarMin[i],GREATER);
+						NewConstraint->Variables.push_back(drainvar);
+						NewConstraint->Coefficient.push_back(1);
+						AddConstraint(NewConstraint);
+						NewConstraint = InitializeLinEquation("Specification constraints",NewBounds->VarMax[i],LESS);
+						NewConstraint->Variables.push_back(drainvar);
+						NewConstraint->Coefficient.push_back(1);
+						AddConstraint(NewConstraint);
+					}
 				}
-			} else {
-				ForwardReactionBounds[GetVariable(i)->AssociatedReaction] = boundmult*GetVariable(i)->Max;
+			}
+		} else if (NewBounds->VarType[i] == FLUX) {
+			Reaction* ConstraintReaction = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
+			if (ConstraintReaction != NULL) {
+				for (int i=0; i < 3; i++) {
+					MFAVariable* fluxvar = ConstraintReaction->GetMFAVar(fluxtypes[i]);
+					if (fluxvar != NULL) {
+						LinEquation* NewConstraint = InitializeLinEquation("Specification constraints",NewBounds->VarMin[i],GREATER);
+						NewConstraint->Variables.push_back(fluxvar);
+						NewConstraint->Coefficient.push_back(1);
+						AddConstraint(NewConstraint);
+						NewConstraint = InitializeLinEquation("Specification constraints",NewBounds->VarMax[i],LESS);
+						NewConstraint->Variables.push_back(fluxvar);
+						NewConstraint->Coefficient.push_back(1);
+						AddConstraint(NewConstraint);
+					}
+				}
 			}
 		}
 	}
-	for (int i=0; i < InData->FNumReactions(); i++) {
-		float max = 0;
-		float min = 0;
-		InData->GetReaction(i)->DecomposeToPiecewiseFluxBounds(0.01,this);
+	//Building the objective function
+	LinEquation* NewObjective = InitializeLinEquation();
+	double reactioncoef = atof(GetParameter("Quantopt reaction objective coefficient").data());
+	double draincoef = atof(GetParameter("Quantopt drain objective coefficient").data());
+	double biomasscoef = atof(GetParameter("Quantopt biomass objective coefficient").data());
+	double atpsynthcoef = atof(GetParameter("Quantopt atpsynth objective coefficient").data());
+	for (int i=0; i < FNumVariables(); i++) {
+		if (GetVariable(i)->Binary) {
+			NewObjective->Variables.push_back(GetVariable(i));
+			if (GetVariable(i)->AssociatedReaction != NULL) {
+				if (GetVariable(i)->AssociatedReaction->GetData("",STRING).compare("") == 0) {
+					NewObjective->Coefficient.push_back(biomasscoef);
+				} else if (GetVariable(i)->AssociatedReaction->GetData("",STRING).compare("") == 0) {
+					NewObjective->Coefficient.push_back(atpsynthcoef);
+				} else {
+					NewObjective->Coefficient.push_back(reactioncoef);
+				}
+			} else if (GetVariable(i)->AssociatedSpecies != NULL) {
+				NewObjective->Coefficient.push_back(draincoef);
+			}
+		}
 	}
-//	//Building full objective function: normal objective - 0.000001 * sum of fluxes
-//	float minfluxcoef = atof(GetParameter("QuantOpt min flux coefficient").data());
-//	for (int i=0; i < int(ObjFunct->Variables.size()); i++) {
-//		ObjFunct->Coefficient[i] = -1*minfluxcoef;
-//	}
-//	for (int i=0; i < int(CurrentObjective->Variables.size()); i++) {
-//		ObjFunct->Coefficient.push_back(CurrentObjective->Coefficient[i]);
-//		ObjFunct->Variables.push_back(CurrentObjective->Variables[i]);
-//	}
-//	this->SetMax();
-//	int NumOriginalVariables = FNumVariables();
-//	//Building the dual problem
-//	MFAProblem* NewProblem = new MFAProblem();
-//	NewProblem->BuildDualMFAProblem(this,InData,InParameters);
-//	ResetIndecies();
-//	//Adding dual constraints and variables
-//	for (int i=0; i < NewProblem->FNumConstraints(); i++) {
-//		AddConstraint(NewProblem->GetConstraint(i));
-//	}
-//	for (int i=0; i < NewProblem->FNumVariables(); i++) {
-//		if (NewProblem->GetVariable(i)->Binary == false) {
-//			AddVariable(NewProblem->GetVariable(i));
-//		}
-//	}
-//	//Creating a constraint setting the dual objective equal to the primal objective
-//	LinEquation* NewConstraint = InitializeLinEquation();
-//	for (int i=0; i < int(GetObjective()->Variables.size()); i++) {
-//		NewConstraint->Variables.push_back(GetObjective()->Variables[i]);
-//		NewConstraint->Coefficient.push_back(GetObjective()->Coefficient[i]);
-//	}
-//	for (int i=0; i < int(NewProblem->GetObjective()->Variables.size()); i++) {
-//		NewConstraint->Variables.push_back(NewProblem->GetObjective()->Variables[i]);
-//		NewConstraint->Coefficient.push_back(-NewProblem->GetObjective()->Coefficient[i]);
-//	}
-//	NewConstraint->EqualityType = EQUAL;
-//	NewConstraint->RightHandSide = 0;
-//	NewConstraint->ConstraintMeaning = "Setting primal objective equal to dual objective";
-//	AddConstraint(NewConstraint);
-//	//Adding constraints supplied to quantopt
-//	FileBounds* NewBounds = ReadBounds("QuantOptMedia");
-//	for (int i=0; i < int(NewBounds->VarName.size()); i++) {
-//		if (NewBounds->VarType[i] == DRAIN_FLUX) {
-//			Species* MediaSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
-//			if (MediaSpecies != NULL) {
-//				MFAVariable* TempVariable = MediaSpecies->GetMFAVar(DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
-//				if (TempVariable != NULL) {
-//					TempVariable = SecondNetworkVariables[TempVariable->Index];
-//					TempVariable->UpperBound = NewBounds->VarMax[i];
-//					TempVariable->LowerBound = NewBounds->VarMin[i];
-//				} else {
-//					TempVariable = MediaSpecies->GetMFAVar(FORWARD_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
-//					if (TempVariable != NULL) {
-//						TempVariable = SecondNetworkVariables[TempVariable->Index];
-//						if (NewBounds->VarMax[i] > 0) {
-//							TempVariable->UpperBound = NewBounds->VarMax[i];
-//							if (NewBounds->VarMin[i] > 0) {
-//								TempVariable->LowerBound = NewBounds->VarMin[i];
-//							} else {
-//								TempVariable->LowerBound = 0;
-//							}
-//						} else {
-//							TempVariable->UpperBound = 0;
-//							TempVariable->LowerBound = 0;
-//						}
-//					}
-//					TempVariable = MediaSpecies->GetMFAVar(REVERSE_DRAIN_FLUX,GetCompartment(NewBounds->VarCompartment[i].data())->Index);
-//					if (TempVariable != NULL) {
-//						TempVariable = SecondNetworkVariables[TempVariable->Index];
-//						if (NewBounds->VarMin[i] < 0) {
-//							TempVariable->UpperBound = -NewBounds->VarMin[i];
-//							if (NewBounds->VarMax[i] > 0) {
-//								TempVariable->LowerBound = 0;
-//							} else {
-//								TempVariable->LowerBound = -NewBounds->VarMax[i];
-//							}
-//						} else {
-//							TempVariable->UpperBound = 0;
-//							TempVariable->LowerBound = 0;
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//	//Building the objective function
-//	NewObjective = InitializeLinEquation();
-//	for (int i=0; i < FNumVariables(); i++) {
-//		if (GetVariable(i)->Binary) {
-//			double Coefficient = 1;
-//			if (GetVariable(i)->AssociatedReaction != NULL) {
-//				if (GetVariable(i)->AssociatedReaction->FType() != REVERSIBLE) {
-//					Coefficient++;
-//					if (GetVariable(i)->AssociatedReaction->FNumGeneGroups() > 0) {
-//						Coefficient++;
-//					}
-//				} else if (GetVariable(i)->AssociatedReaction->FEstDeltaG() != FLAG) {
-//					if (GetVariable(i)->AssociatedReaction->FmMDeltaG(true) < 0 && GetVariable(i)->Type == FORWARD_USE) {
-//						Coefficient = Coefficient - 0.2*GetVariable(i)->AssociatedReaction->FmMDeltaG(true);
-//					} else if (GetVariable(i)->AssociatedReaction->FmMDeltaG(true) > 0 && GetVariable(i)->Type == REVERSE_USE) {
-//						Coefficient = Coefficient + 0.2*GetVariable(i)->AssociatedReaction->FmMDeltaG(true);
-//					}
-//				}
-//			}
-//			NewObjective->Variables.push_back(GetVariable(i));
-//			NewObjective->Coefficient.push_back(Coefficient);
-//		}
-//	}
-//	AddObjective(NewObjective);
-//	SetMax();
-//	ResetIndecies();
-//	vector<int> VariableTypes;
-//	VariableTypes.push_back(OBJECTIVE_TERMS);
-//	ResetSolver();
-//	LoadSolver();
-//	int solutionCount = this->FNumSolutions();
-//	string Note;
-//	if (RecursiveMILP(InData,InParameters,VariableTypes,false) <= 0) {
-//		Note.append("No gap generation solution exists.");
-//		PrintProblemReport(FLAG,InParameters,Note);
-//	} else {
-//		ofstream Output;
-//		OpenOutput(Output,FOutputFilepath()+"QuantitativeOptimization.txt",true);
-//		Output << "Objective\tReactions" << endl;
-//		for (int i=solutionCount; i < this->FNumSolutions(); i++) {
-//			OptSolutionData* newSolution = this->GetSolution(i);
-//			if (newSolution->Notes.compare("Recursive milp solution") == 0) {
-//				bool First = true;
-//				Output << newSolution->Objective << "\t";
-//				for (int j=0; j < int(NewObjective->Variables.size()); j++) {
-//					if (newSolution->SolutionData[NewObjective->Variables[j]->Index] < 0.5 && NewObjective->Variables[j]->Type != COMPLEX_USE) {
-//						if (!First) {
-//							Output << ",";
-//						}
-//						Output << NewObjective->Variables[j]->Name;
-//						First = false;
-//					}
-//				}
-//				Output << endl;
-//			}
-//		}
-//		Output.close();
-//	}
-//	return SUCCESS;
+	AddObjective(NewObjective);
+	SetMax();
+	ResetIndecies();
+	vector<int> VariableTypes;
+	VariableTypes.push_back(OBJECTIVE_TERMS);
+	RecursiveMILP(InData,InParameters,VariableTypes,true);
+	return SUCCESS;
 }
 
 int MFAProblem::SolutionReconciliation(Data* InData, OptimizationParameter* InParameters) {

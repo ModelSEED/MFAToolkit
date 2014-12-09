@@ -4039,6 +4039,72 @@ void Species::CreateMFAVariables(OptimizationParameter* InParameters) {
 			}
 		}
 	}
+
+	this->AddUseVariables(InParameters);
+}
+
+void Species::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAProblem* InProblem) {
+	int types[3] = {FORWARD_DRAIN_FLUX,REVERSE_DRAIN_FLUX,DRAIN_FLUX};
+	int cortypes[3] = {FORWARD_DRAIN_USE,REVERSE_DRAIN_USE,DRAIN_USE};
+	map<int,vector<MFAVariable*> > newvariables;
+	for (int i=0; i < 3; i++) {
+		MFAVariable* originalvar = this->GetMFAVar(types[i]);
+		MFAVariable* newvar = this->GetMFAVar(types[i]);
+		MFAVariable* newusevar = this->GetMFAVar(cortypes[i]);
+		if (newvar != NULL && newvar->Max > MFA_ZERO_TOLERANCE) {
+			double max = newvar->Max;
+			newvar->UpperBound = max/2;
+			int count = 1;
+			vector<MFAVariable*> variables;
+			variables.push_back(newvar);
+			while(newvar->UpperBound > threshold && count < minimum) {
+				newvar = CloneVariable(newvar);
+				newusevar = CloneVariable(newusevar);
+				newvariables[types[i]].push_back(newvar);
+				newvariables[cortypes[i]].push_back(newusevar);
+				newvar->UpperBound = max/2;
+				InProblem->AddVariable(newvar);
+				InProblem->AddVariable(newusevar);
+				LinEquation* NewConstraint = InitializeLinEquation("Species use constraint",0,LESS);
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Variables.push_back(newvar);
+				NewConstraint->Coefficient.push_back(-1*newvar->UpperBound);
+				NewConstraint->Variables.push_back(newusevar);
+				InProblem->AddConstraint(NewConstraint);
+				for (int j=0; j < InProblem->FNumConstraints(); j++) {
+					LinEquation* NewConstraint = InProblem->GetConstraint(j);
+					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Species use constraint") != 0)
+						for (int k=0; k < NewConstraint->Variables.size(); k++) {
+							if (NewConstraint->Variables[k] == originalvar) {
+								NewConstraint->Variables.push_back(newvar);
+								NewConstraint->Coefficient.push_back(NewConstraint->Coefficient[k]);
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void Species::BuildSpeciesConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem) {
+	if (InParameters->DrainUseVar) {
+		int vartypes[3] = {FLUX,FORWARD_FLUX,REVERSE_FLUX};
+		int corrvartypes[3] = {REACTION_USE,FORWARD_USE,REVERSE_USE};
+		for (int i=0; i < 3; i++) {
+			MFAVariable* FluxVar = MFAVariables[vartypes[i]];
+			MFAVariable* UseVar = MFAVariables[vartypes[i]];
+			if (FluxVar != NULL || UseVar != NULL) {
+				LinEquation* NewConstraint = InitializeLinEquation("Species use constraint",0,LESS);
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->Variables.push_back(FluxVar);
+				NewConstraint->Coefficient.push_back(-1*FluxVar->UpperBound);
+				NewConstraint->Variables.push_back(UseVar);
+				InProblem->AddConstraint(NewConstraint);
+			}
+		}
+	}
 }
 
 MFAVariable* Species::CreateMFAVariable(int InType,int InCompartment,double Min, double Max) {
