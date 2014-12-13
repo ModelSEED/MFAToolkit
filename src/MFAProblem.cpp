@@ -2963,7 +2963,8 @@ int MFAProblem::AlternativeSolutionExploration(OptimizationParameter* InParamete
 			}
 		}
 	}
-	ofstream output(FOutputFilepath()+Filename);
+	Filename = FOutputFilepath()+Filename;
+	ofstream output(Filename.data());
 	output << "Essentials:";
 	for (int i=0; i < int(essentials.size()); i++) {
 		if (i > 0) {
