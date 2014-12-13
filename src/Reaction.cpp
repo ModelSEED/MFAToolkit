@@ -2932,7 +2932,7 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAPr
 				InProblem->AddConstraint(NewConstraint);
 				for (int j=0; j < InProblem->FNumConstraints(); j++) {
 					LinEquation* NewConstraint = InProblem->GetConstraint(j);
-					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Reaction use constraint") != 0)
+					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Reaction use constraint") != 0) {
 						for (int k=0; k < NewConstraint->Variables.size(); k++) {
 							if (NewConstraint->Variables[k] == originalvar) {
 								NewConstraint->Variables.push_back(newvar);

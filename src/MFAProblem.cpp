@@ -8316,7 +8316,7 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 		}
 	}
 	//Creating a constraint setting the dual objective equal to the primal objective
-	LinEquation* NewConstraint = InitializeLinEquation();
+	NewConstraint = InitializeLinEquation();
 	for (int i=0; i < int(GetObjective()->Variables.size()); i++) {
 		NewConstraint->Variables.push_back(GetObjective()->Variables[i]);
 		NewConstraint->Coefficient.push_back(GetObjective()->Coefficient[i]);
@@ -8352,10 +8352,10 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 				}
 			}
 		} else if (NewBounds->VarType[i] == FLUX) {
-			Reaction* ConstraintReaction = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
-			if (ConstraintReaction != NULL) {
+			Species* ConstraintSpecies = InData->FindSpecies("DATABASE;ENTRY;NAME",NewBounds->VarName[i].data());
+			if (ConstraintSpecies != NULL) {
 				for (int i=0; i < 3; i++) {
-					MFAVariable* fluxvar = ConstraintReaction->GetMFAVar(fluxtypes[i]);
+					MFAVariable* fluxvar = ConstraintSpecies->GetMFAVar(fluxtypes[i]);
 					if (fluxvar != NULL) {
 						LinEquation* NewConstraint = InitializeLinEquation("Specification constraints",NewBounds->VarMin[i],GREATER);
 						NewConstraint->Variables.push_back(fluxvar);

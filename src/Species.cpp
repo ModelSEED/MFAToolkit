@@ -4073,7 +4073,7 @@ void Species::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAPro
 				InProblem->AddConstraint(NewConstraint);
 				for (int j=0; j < InProblem->FNumConstraints(); j++) {
 					LinEquation* NewConstraint = InProblem->GetConstraint(j);
-					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Species use constraint") != 0)
+					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Species use constraint") != 0) {
 						for (int k=0; k < NewConstraint->Variables.size(); k++) {
 							if (NewConstraint->Variables[k] == originalvar) {
 								NewConstraint->Variables.push_back(newvar);
