@@ -8294,6 +8294,16 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 	for (int i=0; i < InData->FNumReactions(); i++) {
 		InData->GetReaction(i)->DecomposeToPiecewiseFluxBounds(atof(GetParameter("Quantopt threshold").data()),atoi(GetParameter("Quantopt minimum variables").data()),this);
 	}
+	//Seting use variable constraints for biomass fluxes to equality constraints
+	for (int i=0; i < FNumConstraints(); i++) {
+		if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("BiomassComp") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+			this->GetConstraint(i)->EqualityType = EQUAL;
+		} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPMAINT") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+			this->GetConstraint(i)->EqualityType = EQUAL;
+		} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPSYNTH") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+			this->GetConstraint(i)->EqualityType = EQUAL;
+		}
+	}
 	//Decomposing fluxes into multiple bound levels
 	for (int i=0; i < InData->FNumSpecies(); i++) {
 		InData->GetSpecies(i)->DecomposeToPiecewiseFluxBounds(atof(GetParameter("Quantopt threshold").data()),atoi(GetParameter("Quantopt minimum variables").data()),this);
@@ -8377,14 +8387,17 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 	double draincoef = atof(GetParameter("Quantopt drain objective coefficient").data());
 	double biomasscoef = atof(GetParameter("Quantopt biomass objective coefficient").data());
 	double atpsynthcoef = atof(GetParameter("Quantopt atpsynth objective coefficient").data());
+	double atpmaintcoef = atof(GetParameter("Quantopt atpsmaint objective coefficient").data());
 	for (int i=0; i < FNumVariables(); i++) {
 		if (GetVariable(i)->Binary) {
 			NewObjective->Variables.push_back(GetVariable(i));
 			if (GetVariable(i)->AssociatedReaction != NULL) {
-				if (GetVariable(i)->AssociatedReaction->GetData("",STRING).compare("") == 0) {
+				if (GetVariable(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("BiomassComp") == 0) {
 					NewObjective->Coefficient.push_back(biomasscoef);
-				} else if (GetVariable(i)->AssociatedReaction->GetData("",STRING).compare("") == 0) {
+				} else if (GetVariable(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPSYNTH") == 0) {
 					NewObjective->Coefficient.push_back(atpsynthcoef);
+				} else if (GetVariable(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPMAINT") == 0) {
+					NewObjective->Coefficient.push_back(atpmaintcoef);
 				} else {
 					NewObjective->Coefficient.push_back(reactioncoef);
 				}
