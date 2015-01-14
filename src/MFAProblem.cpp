@@ -6417,10 +6417,10 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	ClearVariables();
 	ClearObjective();
 	ClearSolutions();
-	if (!fastgapfill || simultaneous) {
+	//if (!fastgapfill || simultaneous) {
 		InParameters->ReactionsUse = true;
 		InParameters->AllReactionsUse = true;
-	}
+	//}
 	if (GetParameter("Make all reactions reversible in MFA").compare("1") == 0) {
 		InParameters->AllReversible = true;
 	}
