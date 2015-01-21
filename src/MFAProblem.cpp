@@ -4278,6 +4278,9 @@ int MFAProblem::AddPROMConstraints(Data* InData, OptimizationParameter* InParame
 	InData->LoadPROMModel(GetParameter("PROM model filename"));//Loads PROM model data from file
 	ObjectiveConstraint->RightHandSide = -10000;
 	LoadConstToSolver(ObjectiveConstraint->Index);
+	if (MinFluxConstraint != NULL) {
+		MinFluxConstraint->RightHandSide = 1.1*MinFluxConstraint->RightHandSide;
+	}
 	MFAVariable* alpha = InitializeMFAVariable();
 	alpha->Name.assign("alpha");
 	alpha->Type = REACTION_CONSTRAINT;
@@ -4315,6 +4318,9 @@ int MFAProblem::AddPROMConstraints(Data* InData, OptimizationParameter* InParame
 				if (GetVariable(i)->Max < 0) {
 					NewConstraint2->RightHandSide = 0;
 				} else {
+					if (GetVariable(i)->Max == 0) {
+						GetVariable(i)->Max = 100;
+					}
 					NewConstraint2->RightHandSide = promact*1.01*GetVariable(i)->Max;
 				}
 				NewConstraint2->EqualityType =LESS;
@@ -4343,6 +4349,7 @@ int MFAProblem::AddPROMConstraints(Data* InData, OptimizationParameter* InParame
 	LoadObjective();
 	this->ResetSolver();
 	LoadSolver();
+	this->WriteLPFile();
 	CurrentSolution = RunSolver(true,true,true);
 	CurrentSolution->Objective = 0;
 	for (int i=0; i < int(ObjectiveConstraint->Variables.size()); i++) {
