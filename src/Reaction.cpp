@@ -2910,18 +2910,19 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAPr
 		MFAVariable* originalvar = this->GetMFAVar(types[i]);
 		MFAVariable* newvar = this->GetMFAVar(types[i]);
 		MFAVariable* newusevar = this->GetMFAVar(cortypes[i]);
-		if (newvar != NULL && newvar->Max > MFA_ZERO_TOLERANCE) {
+		if (newvar != NULL && newvar->Max > MFA_ZERO_TOLERANCE && newusevar != NULL) {
 			double max = newvar->Max;
 			newvar->UpperBound = max/2;
+			max = max/2;
 			int count = 1;
-			vector<MFAVariable*> variables;
-			variables.push_back(newvar);
+			cout << "Type=" << cortypes[i] << endl;
 			while(newvar->UpperBound > threshold && count < minimum) {
 				newvar = CloneVariable(newvar);
 				newusevar = CloneVariable(newusevar);
 				newvariables[types[i]].push_back(newvar);
 				newvariables[cortypes[i]].push_back(newusevar);
 				newvar->UpperBound = max/2;
+				max = max/2;
 				InProblem->AddVariable(newvar);
 				InProblem->AddVariable(newusevar);
 				LinEquation* NewConstraint = InitializeLinEquation("Reaction use constraint",0,LESS);
@@ -2931,7 +2932,7 @@ void Reaction::DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAPr
 				NewConstraint->Variables.push_back(newusevar);
 				InProblem->AddConstraint(NewConstraint);
 				for (int j=0; j < InProblem->FNumConstraints(); j++) {
-					LinEquation* NewConstraint = InProblem->GetConstraint(j);
+					NewConstraint = InProblem->GetConstraint(j);
 					if (InProblem->GetConstraint(j)->ConstraintMeaning.compare("Reaction use constraint") != 0) {
 						for (int k=0; k < NewConstraint->Variables.size(); k++) {
 							if (NewConstraint->Variables[k] == originalvar) {
@@ -3112,8 +3113,8 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 		int corrvartypes[3] = {REACTION_USE,FORWARD_USE,REVERSE_USE};
 		for (int i=0; i < 3; i++) {
 			MFAVariable* FluxVar = MFAVariables[vartypes[i]];
-			MFAVariable* UseVar = MFAVariables[vartypes[i]];
-			if (FluxVar != NULL || UseVar != NULL) {
+			MFAVariable* UseVar = MFAVariables[corrvartypes[i]];
+			if (FluxVar != NULL && UseVar != NULL) {
 				LinEquation* NewConstraint = InitializeLinEquation("Reaction use constraint",0,LESS);
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->Variables.push_back(FluxVar);

@@ -1606,6 +1606,12 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 	if (InParameters->DoMinimizeFlux && InParameters->OptimalObjectiveFraction > 0.99) {
 		InParameters->OptimalObjectiveFraction = 0.99;
 	}
+	if (InParameters->QuantitativeOptimization) {
+		InParameters->DrainUseVar = true;
+		InParameters->AllDrainUse = true;
+		InParameters->AllReactionsUse = true;
+		InParameters->ReactionsUse = true;
+	}
 	//If the uptake of atoms is restricted, uptake fluxes must be decomposed
 	if (GetParameter("uptake limits").compare("none") != 0 || InParameters->DrainUseVar || InParameters->DetermineMinimalMedia) {
 		InParameters->DecomposeDrain = true;
@@ -2279,21 +2285,20 @@ string GetMFAVariableName(MFAVariable* InVariable) {
 		FErrorFile() << "Unrecognized MFA variable type number: " << InType << endl;
 		FlushErrorFile();
 	}
-	TypeName.append("_");
 
 	if (InVariable->AssociatedReaction != NULL) {
-		TypeName.append(InVariable->AssociatedReaction->GetData("DATABASE",STRING));
+		TypeName.append(InVariable->AssociatedReaction->GetData("DATABASE",STRING).substr(3));
 	} else if (InVariable->AssociatedSpecies != NULL) {
-		TypeName.append(InVariable->AssociatedSpecies->GetData("DATABASE",STRING));
+		TypeName.append(InVariable->AssociatedSpecies->GetData("DATABASE",STRING).substr(3));
 	} else if (InVariable->AssociatedGene != NULL) {
 		TypeName.append(InVariable->AssociatedGene->GetData("DATABASE",STRING));
 	} else {
 		TypeName.append(InVariable->Name);
 	}
 
-	if (InVariable->Compartment != -1) {
-		TypeName.append("_"+GetCompartment(InVariable->Compartment)->Abbreviation);
-	}
+	//if (InVariable->Compartment != -1) {
+		//TypeName.append("_"+GetCompartment(InVariable->Compartment)->Abbreviation);
+	//}
 
 	TypeName = StringReplace(TypeName.data(), "<=>", "RV");
 	TypeName = StringReplace(TypeName.data(), "cue_", "");
@@ -2301,13 +2306,11 @@ string GetMFAVariableName(MFAVariable* InVariable) {
 	TypeName = StringReplace(TypeName.data(), "<=", "R");
 	TypeName = StringReplace(TypeName.data(), "[", "_");
 	TypeName = StringReplace(TypeName.data(), "]", "");
+	TypeName = StringReplace(TypeName.data(), "_", "");
+	TypeName.append(itoa(InVariable->Index));
 
 	if (TypeName.length() > 16) {
 		TypeName = TypeName.substr(0,16);
-	}
-	
-	if (TypeName.compare("FFU_") == 0) {
-		cout << "problem" << endl;
 	}
 
 	//if (variableNames[TypeName] != NULL && variableNames[TypeName] != InVariable) {

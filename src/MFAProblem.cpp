@@ -2007,7 +2007,6 @@ OptSolutionData* MFAProblem::RunSolver(bool SaveSolution, bool InInputSolution,b
 		PrintVariableKey();
 		WriteLPFile();
 	}
-	
 	OptSolutionData* CurrentSolution = NULL;
 
 	CurrentSolution = GlobalRunSolver(Solver,ProbType);
@@ -2534,6 +2533,7 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 				}
 				ObjFunct->Variables.pop_back();
 				ObjFunct->Coefficient.pop_back();
+				cout << GetVariable(i)->Min << " " << GetVariable(i)->Max << " " << linkedvar->Min << " " << linkedvar->Max << endl;
 			}
 		}
 	}
@@ -4460,7 +4460,6 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
 	if (InParameters->PROM || InParameters->QuantitativeOptimization || ((InParameters->TranscriptomeAnalysis || InParameters->GapFilling) && InParameters->ScalePenaltyByFlux)) {
-		cout << "TEST1" << endl;
 		ResetSolver();
 		this->RelaxIntegerVariables = true;
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
@@ -4549,7 +4548,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	} else if (InParameters->GapGeneration) {
 		this->GapGeneration(InData,InParameters);//TODO
 	} else if (InParameters->QuantitativeOptimization) {
-		this->QuantitativeModelOptimization(InData,InParameters);//TODO
+		this->QuantitativeModelOptimization(InData,InParameters);
 	} else if (InParameters->DetermineMinimalMedia) {
 		PrintSolutions(FNumSolutions()-1,FNumSolutions());
 		this->DetermineMinimalFeasibleMedia(InData,InParameters,false);//working
@@ -8303,12 +8302,14 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 	}
 	//Seting use variable constraints for biomass fluxes to equality constraints
 	for (int i=0; i < FNumConstraints(); i++) {
-		if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("BiomassComp") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
-			this->GetConstraint(i)->EqualityType = EQUAL;
-		} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPMAINT") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
-			this->GetConstraint(i)->EqualityType = EQUAL;
-		} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPSYNTH") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
-			this->GetConstraint(i)->EqualityType = EQUAL;
+		if (this->GetConstraint(i)->AssociatedReaction != NULL) {
+			if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("BiomassComp") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+				this->GetConstraint(i)->EqualityType = EQUAL;
+			} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPMAINT") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+				this->GetConstraint(i)->EqualityType = EQUAL;
+			} else if (this->GetConstraint(i)->AssociatedReaction->GetData("FOREIGN",STRING).compare("ATPSYNTH") == 0 && this->GetConstraint(i)->ConstraintMeaning.compare("Reaction use constraint") == 0) {
+				this->GetConstraint(i)->EqualityType = EQUAL;
+			}
 		}
 	}
 	//Decomposing fluxes into multiple bound levels
@@ -8413,9 +8414,17 @@ int MFAProblem::QuantitativeModelOptimization(Data* InData, OptimizationParamete
 			}
 		}
 	}
+	for (int i=0; i < NewObjective->Variables.size(); i++) {
+		cout << NewObjective->Coefficient[i] << "\t" << GetMFAVariableName(NewObjective->Variables[i]) << endl;
+	}
+	cout << "TEST10" << endl;
+	ObjFunct = NULL;
 	AddObjective(NewObjective);
 	SetMax();
 	ResetIndecies();
+	cout << "TEST11" << endl;
+	LoadSolver(true);
+	cout << "TEST12" << endl;
 	vector<int> VariableTypes;
 	VariableTypes.push_back(OBJECTIVE_TERMS);
 	RecursiveMILP(InData,InParameters,VariableTypes,true);
