@@ -4482,8 +4482,9 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
 		this->SetMin();
 		int Status = LoadObjective();
-		CurrentSolution = RunSolver(true,true,true);
-		MinFluxConstraint = MakeObjectiveConstraint(CurrentSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
+		// don't overwrite CurrentSolution because we need it when we call GapFilling
+		OptSolutionData* SumSolution = RunSolver(true,true,true);
+		MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
 		LoadConstToSolver(MinFluxConstraint->Index);
 		if (InParameters->OptimalObjectiveFraction > 0.99) {
 			originalrhs = 0.99*originalrhs;
@@ -7642,8 +7643,14 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	double original_min_flux;
 	if (MinFluxConstraint != NULL) {
 		original_min_flux = MinFluxConstraint->RightHandSide;
-		MinFluxConstraint->RightHandSide = 10000000;
+		MinFluxConstraint->RightHandSide = MinFluxConstraint->RightHandSide*1.2;
 		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	double original_objective;
+	if (this->ObjectiveConstraint != NULL) {
+	  original_objective = ObjectiveConstraint->RightHandSide;
+	  this->ObjectiveConstraint->RightHandSide = 0.1*ObjectiveConstraint->RightHandSide;
+	  LoadConstToSolver(this->ObjectiveConstraint->Index);
 	}
 	double omegap = 1-InParameters->omega;
 	int gfstart = 0;
@@ -7656,7 +7663,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 		//Rescaling the old object coefficients by the maximum objective value
 		for (int i=0; i < OldObjective->Variables.size(); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*sign/CurrentSolution->Objective;
+			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*sign*InParameters->omega/CurrentSolution->Objective;
 		}
 		gfstart = int(ObjFunct->Variables.size());
 	} else {
@@ -7686,7 +7693,17 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	}
 	inactstart = int(ObjFunct->Variables.size());
 	if (InParameters->alpha < 1) {
-		//Reading gapfilling coefficients
+	  // compute max flux
+	  double maxbound = 0;
+	  for (int i=0; i < FNumVariables(); i++) {
+	    if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX || GetVariable(i)->Type == FLUX)) {
+	      if (GetVariable(i)->Max > maxbound) {
+		maxbound = GetVariable(i)->Max;
+	      }
+	    }
+	  }
+	  
+	  //Reading gapfilling coefficients
 		map<MFAVariable*,double,std::less<MFAVariable*> > BaseCoefficients;
 		map<string,Reaction*,std::less<string> > InactiveVar;
 		CalculateGapfillCoefficients(InData,InParameters,InactiveVar,BaseCoefficients,!InParameters->ReactionsUse);
@@ -7714,15 +7731,24 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				for (int j=start; j < stop; j++) {
 					MFAVariable* newvar = CurrentRxn->GetMFAVar(variables[j]);
 					if (newvar != NULL) {
-						ObjFunct->Variables.push_back(newvar);
 						double penalty = atof((*rows)[i][2].data());
 						if (BaseCoefficients.count(newvar) > 0) {
 							penalty = penalty * BaseCoefficients[newvar];
 						}
 						if (!InParameters->ReactionsUse && InParameters->ScalePenaltyByFlux) {
-							penalty = penalty/newvar->Max;
+						  // according to Chris's document, need to check if newvar->Max is zero, in which case scale by maximum flux in any reaction
+						  // BUT - it seems like you don't want to accrue more penalty for a reaction that can't carry flux under any circumstance
+						  // Do we need to check whether we are really doing gapfilling here? Also have the issue of adding two terms that are
+						  // mutually exclusive for any reaction that is reversible
+						  if (newvar->Max == 0) {
+						    penalty = penalty/maxbound;
+						    continue; // don't even add this to the objective function
+						  } else {
+						    penalty = penalty/newvar->Max;
+						  }
 						}
 						penaltysum += penalty;
+						ObjFunct->Variables.push_back(newvar);
 						ObjFunct->Coefficient.push_back(omegap*alphap*penalty);
 					}
 				}
@@ -7749,7 +7775,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	} else {
 		ofstream output;
 		if (OpenOutput(output,(FOutputFilepath()+"GapfillingOutput.txt").data())) {
-			output << "Objective\tGF objective\tRR score/count\tAR score/count\tRJ score/count\tCC score/count\tReactions retained\tActivated reactions\tRejected reactions\tCandidates cut\n";
+			output << "Label\tObjective\tGF objective\tRR score/count\tAR score/count\tRJ score/count\tCC score/count\tReactions retained\tActivated reactions\tRejected reactions\tCandidates cut\n";
 			output.close();
 		}
 		bool stay_in_loop = true;
@@ -7785,6 +7811,10 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	if (MinFluxConstraint != NULL) {
 		MinFluxConstraint->RightHandSide = original_min_flux;
 		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	if (ObjectiveConstraint != NULL) {
+	  ObjectiveConstraint->RightHandSide = original_objective;
+		LoadConstToSolver(ObjectiveConstraint->Index);
 	}
 	delete ObjFunct;
 	if (originalsense) {
