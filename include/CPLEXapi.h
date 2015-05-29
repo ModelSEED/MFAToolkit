@@ -29,7 +29,7 @@ int CPLEXCleanup();
 
 int CPLEXClearSolver();
 
-int CPLEXPrintFromSolver();
+int CPLEXPrintFromSolver(int lpcount);
 
 OptSolutionData* CPLEXRunSolver(int ProbType);
 

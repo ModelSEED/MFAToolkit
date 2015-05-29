@@ -29,7 +29,7 @@ int SCIPCleanup();
 
 int SCIPClearSolver();
 
-int SCIPPrintFromSolver();
+int SCIPPrintFromSolver(int lpcount);
 
 OptSolutionData* SCIPRunSolver(int ProbType);
 

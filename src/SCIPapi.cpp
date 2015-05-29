@@ -22,6 +22,8 @@
 #include <iostream>
 #include <fstream>
 
+int pcount = 0;
+
 int InitializeSCIPVariables() {
 	return SUCCESS;
 }
@@ -38,8 +40,8 @@ int SCIPClearSolver() {
 	return GLPKClearSolver();
 }
 
-int SCIPPrintFromSolver() {
-	return GLPKPrintFromSolver();
+int SCIPPrintFromSolver(int lpcount) {
+	return GLPKPrintFromSolver(lpcount);
 }
 
 OptSolutionData* SCIPRunSolver(int ProbType) {
@@ -55,7 +57,7 @@ OptSolutionData* SCIPRunSolver(int ProbType) {
 	//Printing the problem to an LP file in the output directory
 	string CurrentFilename = GetParameter("LP filename");
 	SetParameter("LP filename","Problem.lp");
-	if (GLPKPrintFromSolver() != SUCCESS) {
+	if (GLPKPrintFromSolver(pcount++) != SUCCESS) {
 		SetParameter("LP filename",CurrentFilename.data());
 		return NULL;	
 	}

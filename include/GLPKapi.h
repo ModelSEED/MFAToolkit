@@ -29,7 +29,7 @@ int GLPKCleanup();
 
 int GLPKClearSolver();
 
-int GLPKPrintFromSolver();
+int GLPKPrintFromSolver(int lpcount);
 
 OptSolutionData* GLPKRunSolver(int ProbType);
 

@@ -43,7 +43,7 @@ int GlobalResetSolver(int Solver);
 
 int GlobalLoadObjective(int Solver, LinEquation* InEquation, bool Max);
 
-int GlobalWriteLPFile(int Solver);
+int GlobalWriteLPFile(int Solver, int lpcount);
 
 int GlobalAddConstraint(int Solver, LinEquation* InConstraint);
 

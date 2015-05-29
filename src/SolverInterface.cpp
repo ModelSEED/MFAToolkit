@@ -161,15 +161,15 @@ int GlobalLoadObjective(int Solver, LinEquation* InEquation, bool Max) {
 	return FAIL;
 }
 
-int GlobalWriteLPFile(int Solver) {
+int GlobalWriteLPFile(int Solver, int lpcount) {
 	if (Solver == CPLEX) {
-		return CPLEXPrintFromSolver();
+		return CPLEXPrintFromSolver(lpcount);
 	} else if (Solver == LINDO) {
 		return LINDOPrintFromSolver();
 	} else if (Solver == GLPK) {
-		return GLPKPrintFromSolver();
+		return GLPKPrintFromSolver(lpcount);
 	} else if (Solver == SOLVER_SCIP) {
-		return SCIPPrintFromSolver();
+	  return SCIPPrintFromSolver(lpcount);
 	} else {
 		return FAIL;
 	}

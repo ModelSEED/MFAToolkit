@@ -20,6 +20,8 @@
 
 #include "MFAToolkit.h"
 
+int lpcount = 0;
+
 MFAProblem::MFAProblem() {
 	SetParameter("MFA output path",(FOutputFilepath()+GetParameter("MFA output")).data());
 	MinFluxConstraint = NULL;
@@ -7008,7 +7010,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			string gapfilled("");
 			this->ResetSolver();
 			this->LoadSolver();
-			GlobalWriteLPFile(Solver);
+			GlobalWriteLPFile(Solver,lpcount);
 			OptSolutionData* solution = RunSolver(true,false,false);
 			if (currentround == 0) {
 				PrintSolutions(-1,-1,false);
@@ -10597,6 +10599,7 @@ void MFAProblem::PrintVariableKey() {
 void MFAProblem::WriteLPFile() {
 	PrintVariableKey();
 	if (GetParameter("write LP file").compare("1") == 0) {
-		GlobalWriteLPFile(Solver);
+	  GlobalWriteLPFile(Solver,lpcount);
+	  lpcount++;
 	}
 }

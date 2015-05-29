@@ -128,7 +128,7 @@ int CPLEXClearSolver() {
 	return SUCCESS;
 }
 
-int CPLEXPrintFromSolver() {
+int CPLEXPrintFromSolver(int lpcount) {
 	int Status = 0;
 	if (CPLEXenv == NULL) {
 		FErrorFile() << "Cannot print problem to file because CPLEX environment is not open." << endl;
@@ -142,7 +142,7 @@ int CPLEXPrintFromSolver() {
 		return FAIL;
 	}
 	
-	string Filename = CheckFilename(FOutputFilepath()+GetParameter("LP filename"));
+	string Filename = CheckFilename(FOutputFilepath()+GetParameter("LP filename")+itoa(lpcount));
 	Status = CPXwriteprob (CPLEXenv, CPLEXModel,Filename.data(), "LP");
 
 	if (Status) {
