@@ -3188,12 +3188,12 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 				fluxvar = this->GetMFAVar(FLUX);
 			}
 			if (fluxvar != NULL) {
-				NewConstraint->Coefficient.push_back(1000);
+				NewConstraint->Coefficient.push_back(MFA_ZERO_TOLERANCE_RECIPROCAL);
 				NewConstraint->Variables.push_back(fluxvar);
 			}
 			fluxvar = this->GetMFAVar(REVERSE_FLUX);
 			if (fluxvar != NULL) {
-				NewConstraint->Coefficient.push_back(1000);
+				NewConstraint->Coefficient.push_back(MFA_ZERO_TOLERANCE_RECIPROCAL);
 				NewConstraint->Variables.push_back(fluxvar);
 			}
 			NewConstraint->Coefficient.push_back(1);

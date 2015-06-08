@@ -4491,7 +4491,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		if (InParameters->OptimalObjectiveFraction > 0.99) {
 			originalrhs = 0.99*originalrhs;
 		}
-		ObjectiveConstraint->RightHandSide = originalrhs;
+		ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
 		LoadConstToSolver(ObjectiveConstraint->Index);
 		this->ResetSolver();
 		Status = LoadSolver();
@@ -4500,6 +4500,8 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		if (sense == GREATER) {
 			this->SetMax();
 		}
+		ObjectiveConstraint->RightHandSide = originalrhs; // done with FVA
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		ResetSolver();
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 			for (int i=0; i < Variables.size(); i++) {
