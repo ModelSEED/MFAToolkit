@@ -2506,9 +2506,9 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 			}
 			if (linkedvar != NULL) {
 				if (GetVariable(i)->Min < 0) {
-					GetVariable(i)->Min = 0;
 					linkedvar->Min = 0;
 					linkedvar->Max = -GetVariable(i)->Min;
+					GetVariable(i)->Min = 0;
 				} else {
 					linkedvar->Min = 0;
 					linkedvar->Max = 0;
@@ -2528,9 +2528,9 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 			}
 			if (linkedvar != NULL) {
 				if (GetVariable(i)->Max < 0) {
+					linkedvar->Min = -GetVariable(i)->Max;
 					GetVariable(i)->Max = 0;
 					GetVariable(i)->Min = 0;
-					linkedvar->Min = -GetVariable(i)->Max;
 				} else {
 					linkedvar->Min = 0;
 				}
@@ -7673,26 +7673,26 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	} else {
 		ObjFunct = InitializeLinEquation("Gapfilling objective");
 	}
+
+	// apply MaxPenalty to entire collection of high and low expression penalty terms
+	int startsize = int(ObjFunct->Variables.size());
+	double penaltysum = 0;
 	double alphap = 1-InParameters->alpha;
 	if (InParameters->alpha > 0) {
 		//Reading inactive coefficients
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"ActivationCoefficients.txt","\t");
-		int startsize = int(ObjFunct->Variables.size());
-		double penaltysum = 0;
 		for (int i=1; i < int(rows->size()); i++) {
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
-			if (CurrentRxn != NULL) {
+			if (CurrentRxn != NULL && ! CurrentRxn->IsBiomassReaction()) {
 				MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
 				if (newvar != NULL) {
 					ObjFunct->Variables.push_back(newvar);
-					double penalty = atof((*rows)[i][1].data());
+					double penalty = atof((*rows)[i][1].data())*InParameters->alpha;
+					cout << "Found penalty for " << (*rows)[i][0].data() << endl;
 					penaltysum += penalty;
-					ObjFunct->Coefficient.push_back(omegap*InParameters->alpha*penalty);
+					ObjFunct->Coefficient.push_back(penalty);
 				}
 			}
-		}
-		for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]/penaltysum;
 		}
 	}
 	inactstart = int(ObjFunct->Variables.size());
@@ -7711,9 +7711,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		map<MFAVariable*,double,std::less<MFAVariable*> > BaseCoefficients;
 		map<string,Reaction*,std::less<string> > InactiveVar;
 		CalculateGapfillCoefficients(InData,InParameters,InactiveVar,BaseCoefficients,!InParameters->ReactionsUse);
-		int startsize = int(ObjFunct->Variables.size());
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"GapfillingCoefficients.txt","\t");
-		double penaltysum = 0;
 		for (int i=1; i < int(rows->size()); i++) {
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL) {
@@ -7746,21 +7744,22 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 						  // mutually exclusive for any reaction that is reversible
 						  if (newvar->Max == 0) {
 						    penalty = penalty/maxbound;
-						    continue; // don't even add this to the objective function
+						    continue; // don't even add this to the objective function for now
 						  } else {
 						    penalty = penalty/newvar->Max;
 						  }
 						}
+						penalty = penalty*alphap;
 						penaltysum += penalty;
 						ObjFunct->Variables.push_back(newvar);
-						ObjFunct->Coefficient.push_back(omegap*alphap*penalty);
+						ObjFunct->Coefficient.push_back(penalty);
 					}
 				}
 			}
 		}
-		for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]/penaltysum;
-		}
+	}
+	for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
+	  ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*omegap/penaltysum;
 	}
 	double threshold = 0.5;
 	if (!InParameters->ReactionsUse) {

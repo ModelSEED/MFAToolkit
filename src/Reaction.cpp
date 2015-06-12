@@ -1750,8 +1750,8 @@ bool Reaction::IsBiomassReaction() {
 	if (GetData("DATABASE",STRING).length() == 8 && GetData("DATABASE",STRING).compare("bio") == 0) {
 		return true;
 	}
-	for (int i=0; i < FNumReactants(); i++) {
-		if (GetReactant(i)->GetData("DATABASE",STRING).compare("cpd11416") == 0) {
+	for (int i=0; i < FNumReactants(PRODUCTS_AND_REACTANTS); i++) {
+	  if (GetReactant(i)->GetData("DATABASE",STRING).compare(0,8,"cpd11416") == 0) {
 			return true;
 		}
 	}

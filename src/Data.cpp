@@ -1788,6 +1788,10 @@ void Data::TransformToBiomassCompartment() {
 	map<Species*, map<int, bool> > BiomassProducts;
 	for (int i=0; i < this->FNumReactions(); i++) {
 		Reaction* current = this->GetReaction(i);
+		// is this old code that shouldn't be executed? I fixed IsBiomassReaction and now
+		// this code runs, but Flux minimization and FVA are infeasible
+		// Skipping for now ...
+		continue;
 		if (current->IsBiomassReaction()) {
 			for (int j=0; j < current->FNumReactants(); j++) {
 				if (current->GetReactantCompartment(j) != GetCompartment("b")->Index) {
