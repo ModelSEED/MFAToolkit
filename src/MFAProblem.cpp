@@ -7735,8 +7735,11 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 					if (newvar != NULL) {
 						double penalty = atof((*rows)[i][2].data());
 						if (BaseCoefficients.count(newvar) > 0) {
-							penalty = penalty * BaseCoefficients[newvar];
+						  penalty = penalty * BaseCoefficients[newvar];
 						}
+						penalty = penalty*alphap;
+						penaltysum += penalty;
+						// wait to scale after summing for max penalty, since max scaling value would be 1
 						if (!InParameters->ReactionsUse && InParameters->ScalePenaltyByFlux) {
 						  // according to Chris's document, need to check if newvar->Max is zero, in which case scale by maximum flux in any reaction
 						  // BUT - it seems like you don't want to accrue more penalty for a reaction that can't carry flux under any circumstance
@@ -7749,8 +7752,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 						    penalty = penalty/newvar->Max;
 						  }
 						}
-						penalty = penalty*alphap;
-						penaltysum += penalty;
 						ObjFunct->Variables.push_back(newvar);
 						ObjFunct->Coefficient.push_back(penalty);
 					}
