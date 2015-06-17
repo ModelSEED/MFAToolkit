@@ -4573,7 +4573,8 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		string note;
 		this->FluxCouplingAnalysis(InData,InParameters,false,note,false);//TODO
 	}
-	PrintSolutions(FNumSolutions()-1,FNumSolutions());//working
+	//PrintSolutions(FNumSolutions()-1,FNumSolutions());//working
+	PrintSolutions(-1,-1);//working
 }
 
 //This function assumes that the desired objective function has already been loaded
