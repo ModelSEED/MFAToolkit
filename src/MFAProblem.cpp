@@ -4461,7 +4461,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	}
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
-	if (InParameters->PROM || InParameters->QuantitativeOptimization || ((InParameters->TranscriptomeAnalysis || InParameters->GapFilling) && InParameters->ScalePenaltyByFlux)) {
+	if (InParameters->PROM || InParameters->QuantitativeOptimization || ((InParameters->TranscriptomeAnalysis || InParameters->GapFilling))) {
 		cout << "TEST1" << endl;
 		ResetSolver();
 		this->RelaxIntegerVariables = true;
@@ -9295,6 +9295,9 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		return FAIL;
 	}
 
+	LinEquation* ObjectiveConstraint = MakeObjectiveConstraint(0.1*ObjectiveValue,GREATER);
+	LoadConstToSolver(ObjectiveConstraint->Index);
+
 	// Now it loads a penalty coefficient for each gene.
 	vector<string>* GeneCoef = StringToStrings(GetParameter("Gene Activity State"),";");
 	if (GeneCoef->size() <= 1) {
@@ -9315,23 +9318,15 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		delete CoefTrio;
 	}
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());
-
-	// Since it is easier to handle, the whole objective is divided by w.
-	// This way, the new coeffcient for biomass is 1.
-	// and the one for Gene Penalty is the fraction (1-w)/w
-	double fractional_w;
-	if (w == 0) {
-	  NewObjective->ConstraintType = QUADRATIC; // special case since we can't divide by zero
-	} else {
-	  NewObjective->ConstraintType = LINEAR;
-		fractional_w = (1 - w) / w;
-		// we want the contributions of the biomass and the gene penalty to be on equivalent scales, so we 
-		// change the coefficient for gene penalty so that it ranges between 0 and the ObjectiveValue (before multiplying by fractional_w).
-		fractional_w = ObjectiveValue * fractional_w / 0.5 / CoeffMap.size();
-		if (FMax()) {
-			fractional_w = -1* fractional_w; // Because the new objective should be minimized.
-		}		
-	}
+	NewObjective->Coefficient[0] = w;
+	NewObjective->ConstraintType = LINEAR;
+	double fractional_w = (1 - w);
+	// we want the contributions of the biomass and the gene penalty to be on equivalent scales, so we 
+	// change the coefficient for gene penalty so that it ranges between 0 and the ObjectiveValue (before multiplying by fractional_w).
+	fractional_w = ObjectiveValue * fractional_w / 0.5 / CoeffMap.size();
+	if (FMax()) {
+	  fractional_w = -1* fractional_w; // Because the new objective should be minimized.
+	}		
 
 	double originalGrowth = GetObjective()->Variables[0]->Value;
 	for (int i=0; i < FNumVariables(); i++) {
@@ -9369,15 +9364,9 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 			    cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
 			    continue;
 		    }
-		    if (w == 0) {
-			    NewObjective->QuadOne.push_back(GetObjective()->Variables[0]);
-			    NewObjective->QuadTwo.push_back(NewVariable);
-			    NewObjective->QuadCoeff.push_back(-1*GetObjective()->Coefficient[0] * CoeffMap[GetVariable(i)->Name] / 0.5 / CoeffMap.size());			    
-		    } else {
-			    NewObjective->Variables.push_back(NewVariable);
-			    NewObjective->Coefficient.push_back(fractional_w * CoeffMap[GetVariable(i)->Name]);		      
-		    }
 
+		    NewObjective->Variables.push_back(NewVariable);
+		    NewObjective->Coefficient.push_back(fractional_w * CoeffMap[GetVariable(i)->Name]);		      
 	    }
 	  }
 	}
