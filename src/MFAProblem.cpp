@@ -7682,36 +7682,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		//Reading inactive coefficients
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"ActivationCoefficients.txt","\t");
 		for (int i=1; i < int(rows->size()); i++) {
+		  cout << "Processing " << (*rows)[i][0].data() << endl;
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL && ! CurrentRxn->IsBiomassReaction()) {
-			  // no point in creating penalities for high expression reactions that are essential or blocked
-			  bool essential = false;
-			  vector<int> variables;
-			  variables.push_back(FLUX);
-			  variables.push_back(FORWARD_FLUX);
-			  variables.push_back(REVERSE_FLUX);
-			  if (InParameters->ReactionsUse) {
-			    variables[0] = REACTION_USE;
-			    variables[1] = FORWARD_USE;
-			    variables[2] = REVERSE_USE;
-			  }
-			  int start = 0;
-			  int stop = 3;
-			  for (int j=start; j < stop; j++) {
-			    MFAVariable* mfavar = CurrentRxn->GetMFAVar(variables[j]);
-			    if (mfavar != NULL) {
-			      if ((mfavar->Min > 0 && mfavar->Max > 0) || (mfavar->Min < 0 && mfavar->Max < 0) || (mfavar->Min == 0 && mfavar->Max == 0)) {
-				essential = true;
-				cout << "Skipping penalty for high expression reaction " << (*rows)[i][0].data() << " because it is essential or blocked." << endl;
-				break;
-			      }
-			    }
-			  }
-			      
-			  if (essential) {
-			    continue;
-			  }
-
 			  MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
 			  if (newvar != NULL) {
 			    ObjFunct->Variables.push_back(newvar);
@@ -7742,7 +7715,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		for (int i=1; i < int(rows->size()); i++) {
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL) {
-			  bool essential = false;
 				vector<int> variables;
 				variables.push_back(FLUX);
 				variables.push_back(FORWARD_FLUX);
@@ -7761,14 +7733,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				for (int j=start; j < stop; j++) {
 					MFAVariable* newvar = CurrentRxn->GetMFAVar(variables[j]);
 					if (newvar != NULL) {
-					  
-					  if ((newvar->Min > 0 && newvar->Max > 0) || (newvar->Min < 0 && newvar->Max < 0) || (newvar->Min == 0 && newvar->Max == 0)) {
-					    essential = true;
-					    cout << "Skipping penalty for low expression reaction " << (*rows)[i][0].data() << " because it is essential or blocked." << endl;
-					    break;
-					  }
-
-						double penalty = atof((*rows)[i][2].data());
+					        double penalty = atof((*rows)[i][2].data());
 						if (BaseCoefficients.count(newvar) > 0) {
 						  penalty = penalty * BaseCoefficients[newvar];
 						}
@@ -7792,11 +7757,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 						ObjFunct->Coefficient.push_back(penalty);
 					}
 				}
-
-				if (essential) {
-				  continue;
-				}
-
 			}
 		}
 	}
