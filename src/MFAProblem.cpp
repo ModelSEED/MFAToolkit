@@ -4486,19 +4486,21 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		OptSolutionData* SumSolution = RunSolver(true,true,true);
 		MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
 		LoadConstToSolver(MinFluxConstraint->Index);
-		if (InParameters->OptimalObjectiveFraction > 0.99) {
-			originalrhs = 0.99*originalrhs;
+		if (InParameters->ScalePenaltyByFlux) {
+		  if (InParameters->OptimalObjectiveFraction > 0.99) {
+		    originalrhs = 0.99*originalrhs;
+		  }
+		  ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
+		  LoadConstToSolver(ObjectiveConstraint->Index);
+		  this->ResetSolver();
+		  Status = LoadSolver();
+		  this->FindTightBounds(InData,InParameters,false,true);
+		  ObjFunct = CurrentObjective;//Restoring original objective
+		  if (sense == GREATER) {
+		    this->SetMax();
+		  }
+		  ObjectiveConstraint->RightHandSide = originalrhs; // done with FVA
 		}
-		ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
-		LoadConstToSolver(ObjectiveConstraint->Index);
-		this->ResetSolver();
-		Status = LoadSolver();
-		this->FindTightBounds(InData,InParameters,false,true);
-		ObjFunct = CurrentObjective;//Restoring original objective
-		if (sense == GREATER) {
-			this->SetMax();
-		}
-		ObjectiveConstraint->RightHandSide = originalrhs; // done with FVA
 		LoadConstToSolver(ObjectiveConstraint->Index);
 		ResetSolver();
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
