@@ -1258,6 +1258,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->IntervalOptimization = (GetParameter("optimize organism intervals").compare("1") == 0);
 	NewParameters->DeletionOptimization = (GetParameter("optimize deletions").compare("1") == 0);
 	NewParameters->MinimizeDeltaGError = (GetParameter("minimize deltaG error").compare("1") == 0);
+	NewParameters->AbundanceConstraint = (GetParameter("add abundance constraint").compare("1") == 0);
 
 	//Variable use parameters
 	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);

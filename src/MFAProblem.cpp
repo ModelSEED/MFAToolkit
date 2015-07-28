@@ -20,6 +20,8 @@
 
 #include "MFAToolkit.h"
 
+int lpcount = 0;
+
 MFAProblem::MFAProblem() {
 	SetParameter("MFA output path",(FOutputFilepath()+GetParameter("MFA output")).data());
 	MinFluxConstraint = NULL;
@@ -2503,9 +2505,9 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 			}
 			if (linkedvar != NULL) {
 				if (GetVariable(i)->Min < 0) {
-					GetVariable(i)->Min = 0;
 					linkedvar->Min = 0;
 					linkedvar->Max = -GetVariable(i)->Min;
+					GetVariable(i)->Min = 0;
 				} else {
 					linkedvar->Min = 0;
 					linkedvar->Max = 0;
@@ -2525,9 +2527,9 @@ int MFAProblem::FindTightBounds(Data* InData,OptimizationParameter*& InParameter
 			}
 			if (linkedvar != NULL) {
 				if (GetVariable(i)->Max < 0) {
+					linkedvar->Min = -GetVariable(i)->Max;
 					GetVariable(i)->Max = 0;
 					GetVariable(i)->Min = 0;
-					linkedvar->Min = -GetVariable(i)->Max;
 				} else {
 					linkedvar->Min = 0;
 				}
@@ -4472,8 +4474,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		}
 		LoadSolver(false);
 		float originalrhs = ObjectiveConstraint->RightHandSide;
-		ObjectiveConstraint->RightHandSide = CurrentSolution->Objective;//Fixing objective at maximum value
-		LoadConstToSolver(ObjectiveConstraint->Index);
+		//Already Fixed objective at maximum value just before this "if" clause
 		LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
 		ObjFunct = NULL;
 		this->AddSumObjective(FLUX,false,false,1,false);
@@ -4481,13 +4482,14 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
 		this->SetMin();
 		int Status = LoadObjective();
-		CurrentSolution = RunSolver(true,true,true);
-		MinFluxConstraint = MakeObjectiveConstraint(CurrentSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
+		// don't overwrite CurrentSolution because we need it when we call GapFilling
+		OptSolutionData* SumSolution = RunSolver(true,true,true);
+		MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
 		LoadConstToSolver(MinFluxConstraint->Index);
 		if (InParameters->OptimalObjectiveFraction > 0.99) {
 			originalrhs = 0.99*originalrhs;
 		}
-		ObjectiveConstraint->RightHandSide = originalrhs;
+		ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
 		LoadConstToSolver(ObjectiveConstraint->Index);
 		this->ResetSolver();
 		Status = LoadSolver();
@@ -4496,6 +4498,8 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		if (sense == GREATER) {
 			this->SetMax();
 		}
+		ObjectiveConstraint->RightHandSide = originalrhs; // done with FVA
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		ResetSolver();
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 			for (int i=0; i < Variables.size(); i++) {
@@ -4568,7 +4572,8 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		string note;
 		this->FluxCouplingAnalysis(InData,InParameters,false,note,false);//TODO
 	}
-	PrintSolutions(FNumSolutions()-1,FNumSolutions());//working
+	//PrintSolutions(FNumSolutions()-1,FNumSolutions());//working
+	PrintSolutions(-1,-1);//working
 }
 
 //This function assumes that the desired objective function has already been loaded
@@ -7006,7 +7011,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 			string gapfilled("");
 			this->ResetSolver();
 			this->LoadSolver();
-			GlobalWriteLPFile(Solver);
+			GlobalWriteLPFile(Solver,lpcount);
 			OptSolutionData* solution = RunSolver(true,false,false);
 			if (currentround == 0) {
 				PrintSolutions(-1,-1,false);
@@ -7641,8 +7646,14 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	double original_min_flux;
 	if (MinFluxConstraint != NULL) {
 		original_min_flux = MinFluxConstraint->RightHandSide;
-		MinFluxConstraint->RightHandSide = 10000000;
+		MinFluxConstraint->RightHandSide = MinFluxConstraint->RightHandSide*1.2;
 		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	double original_objective;
+	if (this->ObjectiveConstraint != NULL) {
+	  original_objective = ObjectiveConstraint->RightHandSide;
+	  this->ObjectiveConstraint->RightHandSide = 0.1*ObjectiveConstraint->RightHandSide;
+	  LoadConstToSolver(this->ObjectiveConstraint->Index);
 	}
 	double omegap = 1-InParameters->omega;
 	int gfstart = 0;
@@ -7655,43 +7666,51 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 		//Rescaling the old object coefficients by the maximum objective value
 		for (int i=0; i < OldObjective->Variables.size(); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*sign/CurrentSolution->Objective;
+			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*sign*InParameters->omega/CurrentSolution->Objective;
 		}
 		gfstart = int(ObjFunct->Variables.size());
 	} else {
 		ObjFunct = InitializeLinEquation("Gapfilling objective");
 	}
+
+	// apply MaxPenalty to entire collection of high and low expression penalty terms
+	int startsize = int(ObjFunct->Variables.size());
+	double penaltysum = 0;
 	double alphap = 1-InParameters->alpha;
 	if (InParameters->alpha > 0) {
 		//Reading inactive coefficients
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"ActivationCoefficients.txt","\t");
-		int startsize = int(ObjFunct->Variables.size());
-		double penaltysum = 0;
 		for (int i=1; i < int(rows->size()); i++) {
+		  cout << "Processing " << (*rows)[i][0].data() << endl;
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
-			if (CurrentRxn != NULL) {
-				MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
-				if (newvar != NULL) {
-					ObjFunct->Variables.push_back(newvar);
-					double penalty = atof((*rows)[i][1].data());
-					penaltysum += penalty;
-					ObjFunct->Coefficient.push_back(omegap*InParameters->alpha*penalty);
-				}
+			if (CurrentRxn != NULL && ! CurrentRxn->IsBiomassReaction()) {
+			  MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
+			  if (newvar != NULL) {
+			    ObjFunct->Variables.push_back(newvar);
+			    double penalty = atof((*rows)[i][1].data())*InParameters->alpha;
+			    penaltysum += penalty;
+			    ObjFunct->Coefficient.push_back(penalty);
+			  }
 			}
-		}
-		for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]/penaltysum;
 		}
 	}
 	inactstart = int(ObjFunct->Variables.size());
 	if (InParameters->alpha < 1) {
-		//Reading gapfilling coefficients
+	  // compute max flux
+	  double maxbound = 0;
+	  for (int i=0; i < FNumVariables(); i++) {
+	    if (GetVariable(i)->AssociatedReaction != NULL && (GetVariable(i)->Type == FORWARD_FLUX || GetVariable(i)->Type == REVERSE_FLUX || GetVariable(i)->Type == FLUX)) {
+	      if (GetVariable(i)->Max > maxbound) {
+		maxbound = GetVariable(i)->Max;
+	      }
+	    }
+	  }
+	  
+	  //Reading gapfilling coefficients
 		map<MFAVariable*,double,std::less<MFAVariable*> > BaseCoefficients;
 		map<string,Reaction*,std::less<string> > InactiveVar;
 		CalculateGapfillCoefficients(InData,InParameters,InactiveVar,BaseCoefficients,!InParameters->ReactionsUse);
-		int startsize = int(ObjFunct->Variables.size());
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"GapfillingCoefficients.txt","\t");
-		double penaltysum = 0;
 		for (int i=1; i < int(rows->size()); i++) {
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL) {
@@ -7713,23 +7732,35 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				for (int j=start; j < stop; j++) {
 					MFAVariable* newvar = CurrentRxn->GetMFAVar(variables[j]);
 					if (newvar != NULL) {
-						ObjFunct->Variables.push_back(newvar);
-						double penalty = atof((*rows)[i][2].data());
+					        double penalty = atof((*rows)[i][2].data());
 						if (BaseCoefficients.count(newvar) > 0) {
-							penalty = penalty * BaseCoefficients[newvar];
+						  penalty = penalty * BaseCoefficients[newvar];
 						}
-						if (!InParameters->ReactionsUse && InParameters->ScalePenaltyByFlux) {
-							penalty = penalty/newvar->Max;
-						}
+						penalty = penalty*alphap;
 						penaltysum += penalty;
-						ObjFunct->Coefficient.push_back(omegap*alphap*penalty);
+						// wait to scale after summing for max penalty, since max scaling value would be 1
+						if (!InParameters->ReactionsUse && InParameters->ScalePenaltyByFlux) {
+						  // according to Chris's document, need to check if newvar->Max is zero, in which case scale by maximum flux in any reaction
+						  // BUT - it seems like you don't want to accrue more penalty for a reaction that can't carry flux under any circumstance
+						  // Do we need to check whether we are really doing gapfilling here? Also have the issue of adding two terms that are
+						  // mutually exclusive for any reaction that is reversible
+						  if (newvar->Max == 0) {
+						    penalty = penalty/maxbound;
+						    cout << "Skipping penalty for low expression reaction " << (*rows)[i][0].data() << " because it is blocked." << endl;						    
+						    continue; // don't even add this to the objective function for now
+						  } else {
+						    penalty = penalty/newvar->Max;
+						  }
+						}
+						ObjFunct->Variables.push_back(newvar);
+						ObjFunct->Coefficient.push_back(penalty);
 					}
 				}
 			}
 		}
-		for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
-			ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]/penaltysum;
-		}
+	}
+	for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
+	  ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*omegap/penaltysum;
 	}
 	double threshold = 0.5;
 	if (!InParameters->ReactionsUse) {
@@ -7748,7 +7779,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	} else {
 		ofstream output;
 		if (OpenOutput(output,(FOutputFilepath()+"GapfillingOutput.txt").data())) {
-			output << "Objective\tGF objective\tRR score/count\tAR score/count\tRJ score/count\tCC score/count\tReactions retained\tActivated reactions\tRejected reactions\tCandidates cut\n";
+			output << "Label\tObjective\tGF objective\tRR score/count\tAR score/count\tRJ score/count\tCC score/count\tReactions retained\tActivated reactions\tRejected reactions\tCandidates cut\n";
 			output.close();
 		}
 		bool stay_in_loop = true;
@@ -7784,6 +7815,10 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	if (MinFluxConstraint != NULL) {
 		MinFluxConstraint->RightHandSide = original_min_flux;
 		LoadConstToSolver(MinFluxConstraint->Index);
+	}
+	if (ObjectiveConstraint != NULL) {
+	  ObjectiveConstraint->RightHandSide = original_objective;
+		LoadConstToSolver(ObjectiveConstraint->Index);
 	}
 	delete ObjFunct;
 	if (originalsense) {
@@ -9269,6 +9304,9 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		return FAIL;
 	}
 
+	LinEquation* ObjectiveConstraint = MakeObjectiveConstraint(0.1*ObjectiveValue,GREATER);
+	LoadConstToSolver(ObjectiveConstraint->Index);
+
 	// Now it loads a penalty coefficient for each gene.
 	vector<string>* GeneCoef = StringToStrings(GetParameter("Gene Activity State"),";");
 	if (GeneCoef->size() <= 1) {
@@ -9289,23 +9327,15 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 		delete CoefTrio;
 	}
 	LinEquation* NewObjective = CloneLinEquation(GetObjective());
-
-	// Since it is easier to handle, the whole objective is divided by w.
-	// This way, the new coeffcient for biomass is 1.
-	// and the one for Gene Penalty is the fraction (1-w)/w
-	double fractional_w;
-	if (w == 0) {
-	  NewObjective->ConstraintType = QUADRATIC; // special case since we can't divide by zero
-	} else {
-	  NewObjective->ConstraintType = LINEAR;
-		fractional_w = (1 - w) / w;
-		// we want the contributions of the biomass and the gene penalty to be on equivalent scales, so we 
-		// change the coefficient for gene penalty so that it ranges between 0 and the ObjectiveValue (before multiplying by fractional_w).
-		fractional_w = ObjectiveValue * fractional_w / 0.5 / CoeffMap.size();
-		if (FMax()) {
-			fractional_w = -1* fractional_w; // Because the new objective should be minimized.
-		}		
-	}
+	NewObjective->Coefficient[0] = w;
+	NewObjective->ConstraintType = LINEAR;
+	double fractional_w = (1 - w);
+	// we want the contributions of the biomass and the gene penalty to be on equivalent scales, so we 
+	// change the coefficient for gene penalty so that it ranges between 0 and the ObjectiveValue (before multiplying by fractional_w).
+	fractional_w = ObjectiveValue * fractional_w / 0.5 / CoeffMap.size();
+	if (FMax()) {
+	  fractional_w = -1* fractional_w; // Because the new objective should be minimized.
+	}		
 
 	double originalGrowth = GetObjective()->Variables[0]->Value;
 	for (int i=0; i < FNumVariables(); i++) {
@@ -9343,15 +9373,9 @@ int MFAProblem::FitGeneActivtyState(Data* InData) {
 			    cerr << "Ignore unknown case " + CaseMap[GetVariable(i)->Name] + " for gene " +  GetVariable(i)->Name + "!" << endl; 
 			    continue;
 		    }
-		    if (w == 0) {
-			    NewObjective->QuadOne.push_back(GetObjective()->Variables[0]);
-			    NewObjective->QuadTwo.push_back(NewVariable);
-			    NewObjective->QuadCoeff.push_back(-1*GetObjective()->Coefficient[0] * CoeffMap[GetVariable(i)->Name] / 0.5 / CoeffMap.size());			    
-		    } else {
-			    NewObjective->Variables.push_back(NewVariable);
-			    NewObjective->Coefficient.push_back(fractional_w * CoeffMap[GetVariable(i)->Name]);		      
-		    }
 
+		    NewObjective->Variables.push_back(NewVariable);
+		    NewObjective->Coefficient.push_back(fractional_w * CoeffMap[GetVariable(i)->Name]);		      
 	    }
 	  }
 	}
@@ -10576,6 +10600,7 @@ void MFAProblem::PrintVariableKey() {
 void MFAProblem::WriteLPFile() {
 	PrintVariableKey();
 	if (GetParameter("write LP file").compare("1") == 0) {
-		GlobalWriteLPFile(Solver);
+	  GlobalWriteLPFile(Solver,lpcount);
+	  lpcount++;
 	}
 }

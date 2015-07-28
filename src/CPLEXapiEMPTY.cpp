@@ -16,7 +16,7 @@ int CPLEXClearSolver() {
 	return FAIL;
 }
 
-int CPLEXPrintFromSolver() {
+int CPLEXPrintFromSolver(int lpcount) {
 	return FAIL;
 }
 

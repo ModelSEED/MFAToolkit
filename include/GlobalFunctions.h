@@ -324,6 +324,7 @@ struct OptimizationParameter {
 	bool MinimizeDeltaGError;
 	bool AlternativeSolutionAlgorithm;
 	bool DetermineCoEssRxns;
+	bool AbundanceConstraint;
 	double DeadEndCoefficient;
 
 	bool AddLumpedReactions;

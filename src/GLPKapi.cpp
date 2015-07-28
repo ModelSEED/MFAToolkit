@@ -58,7 +58,7 @@ int GLPKClearSolver() {
 	return SUCCESS;
 }
 
-int GLPKPrintFromSolver() {
+int GLPKPrintFromSolver(int lpcount) {
 	if (GLPKModel == NULL) {
 		FErrorFile() << "Cannot print problem because problem does not exist." << endl;
 		FlushErrorFile();
@@ -67,6 +67,15 @@ int GLPKPrintFromSolver() {
 
 	string Filename = CheckFilename(FOutputFilepath()+GetParameter("LP filename"));
 	int Status = lpx_write_cpxlp(GLPKModel,ConvertStringToCString(Filename));
+
+	if (Status) {
+		FErrorFile() << "Unable to write problem to file due to error in writing function." << endl;
+		FlushErrorFile();
+		return FAIL;
+	}
+
+	Filename = CheckFilename(FOutputFilepath()+GetParameter("LP filename")+itoa(lpcount));
+	Status = lpx_write_cpxlp(GLPKModel,ConvertStringToCString(Filename));
 
 	if (Status) {
 		FErrorFile() << "Unable to write problem to file due to error in writing function." << endl;
