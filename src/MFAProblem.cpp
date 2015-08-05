@@ -2877,7 +2877,7 @@ int MFAProblem::AlternativeSolutionExploration(OptimizationParameter* InParamete
 	vector<string> essentials;
 	for (int i=0; i < int(InitialSolutionVariables.size()); i++) {
 		if (!InitialSolutionVariables[i]->Mark) {
-			cout << "Variable " << i << " of " << int(InitialSolutionVariables.size()) << endl;
+			cout << "Variable " << i << " of " << int(InitialSolutionVariables.size()) << " with name " << InitialSolutionVariables[i]->Name << endl;
 			ObjFunct = CloneLinEquation(OriginalObj);
 			vector<string> group;
 			vector<vector<string> > alternatives;
@@ -4437,7 +4437,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	}
 	//Building core problem
 	BuildCoreProblem(InData,InParameters);
-	this->LoadSolver();
+	this->LoadSolver(false);
 	bool rerun = false;
 	OptSolutionData* CurrentSolution = RunSolver(true,true,true);
 	if (CurrentSolution == NULL || CurrentSolution->Status != SUCCESS) {
@@ -4461,7 +4461,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	}
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
-	if (InParameters->PROM || InParameters->QuantitativeOptimization || ((InParameters->TranscriptomeAnalysis || InParameters->GapFilling) && InParameters->ScalePenaltyByFlux)) {
+	if (InParameters->PROM || InParameters->QuantitativeOptimization || InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
 		ResetSolver();
 		this->RelaxIntegerVariables = true;
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
@@ -4483,7 +4483,9 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		this->SetMin();
 		int Status = LoadObjective();
 		// don't overwrite CurrentSolution because we need it when we call GapFilling
+		cout << "Running Flux Minimization" << endl;
 		OptSolutionData* SumSolution = RunSolver(true,true,true);
+		printf("Flux Min result is %f\n",SumSolution->Objective);
 		MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
 		LoadConstToSolver(MinFluxConstraint->Index);
 		if (InParameters->ScalePenaltyByFlux) {
@@ -4495,12 +4497,13 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		  this->ResetSolver();
 		  Status = LoadSolver();
 		  this->FindTightBounds(InData,InParameters,false,true);
-		  ObjFunct = CurrentObjective;//Restoring original objective
-		  if (sense == GREATER) {
-		    this->SetMax();
-		  }
-		  ObjectiveConstraint->RightHandSide = originalrhs; // done with FVA
+		  // done with FVA
 		}
+		ObjFunct = CurrentObjective;//Restoring original objective
+		if (sense == GREATER) {
+			this->SetMax();
+		}
+		ObjectiveConstraint->RightHandSide = originalrhs;
 		LoadConstToSolver(ObjectiveConstraint->Index);
 		ResetSolver();
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
@@ -7683,7 +7686,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		//Reading inactive coefficients
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"ActivationCoefficients.txt","\t");
 		for (int i=1; i < int(rows->size()); i++) {
-		  cout << "Processing " << (*rows)[i][0].data() << endl;
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL && ! CurrentRxn->IsBiomassReaction()) {
 			  MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
@@ -7813,6 +7815,95 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 
 	}
+
+	//Run biomass maximization one more time with reaction use variables set according to results of activation and inactivation
+	delete ObjFunct;
+	if (originalsense) {
+		this->SetMax();
+	}
+	ObjFunct = OldObjective;
+	LoadObjective();
+
+	vector<string>* gapfilledrxns = StringToStrings(GetParameter("current gapfilled reactions"),";"); // low expression, carry flux
+	vector<string>* activatedrxns = StringToStrings(GetParameter("current activated reactions"),";"); // high expression, carry flux
+	vector<string>* notactivatedrxns = StringToStrings(GetParameter("current rejected reactions"),";"); // high expression, do not carry flux
+	vector<string>* cutrxns = StringToStrings(GetParameter("current cut candidate reactions"),";"); // low expression, do not carry flux
+
+	for (int i=0; i < (*gapfilledrxns).size(); i++) {
+		string ReactionID = (*gapfilledrxns)[i].substr(1,(*gapfilledrxns)[i].length()-1);
+		string Sign = (*gapfilledrxns)[i].substr(0,1);
+		for (int i=0; i < FNumVariables(); i++) {
+			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
+				LinEquation* NewConstraint = InitializeLinEquation();
+				NewConstraint->Variables.push_back(GetVariable(i));
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->RightHandSide = 0;
+				NewConstraint->EqualityType = EQUAL;
+				AddConstraint(NewConstraint);
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				//cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			}
+		}
+	}
+	for (int i=0; i < (*activatedrxns).size(); i++) {
+		string ReactionID = (*activatedrxns)[i];
+		for (int i=0; i < FNumVariables(); i++) {
+			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
+				LinEquation* NewConstraint = InitializeLinEquation();
+				NewConstraint->Variables.push_back(GetVariable(i));
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->RightHandSide = 0;
+				NewConstraint->EqualityType = EQUAL;
+				AddConstraint(NewConstraint);
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				//cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			}
+		}
+	}
+	for (int i=0; i < (*notactivatedrxns).size(); i++) {
+		string ReactionID = (*notactivatedrxns)[i];
+		for (int i=0; i < FNumVariables(); i++) {
+			if ((GetVariable(i)->Type == REVERSE_USE || GetVariable(i)->Type == FORWARD_USE || GetVariable(i)->Type == REACTION_USE)
+					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
+				LinEquation* NewConstraint = InitializeLinEquation();
+				NewConstraint->Variables.push_back(GetVariable(i));
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->RightHandSide = 0;
+				NewConstraint->EqualityType = EQUAL;
+				AddConstraint(NewConstraint);
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				//cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			}
+		}
+	}
+	for (int i=0; i < (*cutrxns).size(); i++) {
+		string ReactionID = (*cutrxns)[i].substr(1,(*cutrxns)[i].length()-1);
+		string Sign = (*cutrxns)[i].substr(0,1);
+		for (int i=0; i < FNumVariables(); i++) {
+			if (((GetVariable(i)->Type == REVERSE_USE && Sign.compare("-") == 0) || (GetVariable(i)->Type == FORWARD_USE  && Sign.compare("+") == 0) || GetVariable(i)->Type == REACTION_USE)
+					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
+				LinEquation* NewConstraint = InitializeLinEquation();
+				NewConstraint->Variables.push_back(GetVariable(i));
+				NewConstraint->Coefficient.push_back(1);
+				NewConstraint->RightHandSide = 0;
+				NewConstraint->EqualityType = EQUAL;
+				//AddConstraint(NewConstraint);
+				NewConstraint->ConstraintType = LINEAR;
+				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				//cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			}
+		}
+	}
+	this->LoadSolver(true);
+	CurrentSolution = RunSolver(true,false,false);
+	cout << "Final biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
+	if (CurrentSolution->Status != SUCCESS) {
+		SetParameter("expression informed biomass optimization","fail");
+		return FAIL;
+	}
 	//Restoring original problem
 	if (MinFluxConstraint != NULL) {
 		MinFluxConstraint->RightHandSide = original_min_flux;
@@ -7822,12 +7913,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	  ObjectiveConstraint->RightHandSide = original_objective;
 		LoadConstToSolver(ObjectiveConstraint->Index);
 	}
-	delete ObjFunct;
-	if (originalsense) {
-		this->SetMax();
-	}
-	ObjFunct = OldObjective;
-	LoadObjective();
 	this->loadBounds(bounds,true);
 }
 
@@ -7909,6 +7994,9 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 	SetParameter("original objective",dtoa(objective));
 	if (stay_in_loop) {
 		SetParameter("current gapfilled reactions",rxns[0].data());
+		SetParameter("current activated reactions",rxns[1].data());
+		SetParameter("current rejected reactions",rxns[2].data());
+		SetParameter("current cut candidate reactions",rxns[3].data());
 		if (OpenOutput(output,(FOutputFilepath()+"GapfillingOutput.txt").data(),true)) {
 			cout << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
 			output << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
@@ -10602,6 +10690,7 @@ void MFAProblem::PrintVariableKey() {
 void MFAProblem::WriteLPFile() {
 	PrintVariableKey();
 	if (GetParameter("write LP file").compare("1") == 0) {
+	  cout << "Writing LP file number " << itoa(lpcount) << endl;
 	  GlobalWriteLPFile(Solver,lpcount);
 	  lpcount++;
 	}
