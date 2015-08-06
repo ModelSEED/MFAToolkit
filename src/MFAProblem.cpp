@@ -7657,7 +7657,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	double original_objective;
 	if (this->ObjectiveConstraint != NULL) {
 	  original_objective = ObjectiveConstraint->RightHandSide;
-	  this->ObjectiveConstraint->RightHandSide = 0.1*ObjectiveConstraint->RightHandSide;
+	  this->ObjectiveConstraint->RightHandSide = 0.001*ObjectiveConstraint->RightHandSide; // one thousandth because really we just want at least minimal growth
 	  LoadConstToSolver(this->ObjectiveConstraint->Index);
 	}
 	double omegap = 1-InParameters->omega;
@@ -7685,7 +7685,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	if (InParameters->alpha > 0) {
 		//Reading inactive coefficients
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"ActivationCoefficients.txt","\t");
+		cout << "Processing ActivationCoefficients.txt" << endl;
 		for (int i=1; i < int(rows->size()); i++) {
+			cout << (*rows)[i][0].data();
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			if (CurrentRxn != NULL && ! CurrentRxn->IsBiomassReaction()) {
 			  MFAVariable* newvar = CurrentRxn->GetMFAVar(REACTION_SLACK);
@@ -7694,7 +7696,11 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 			    double penalty = atof((*rows)[i][1].data())*InParameters->alpha;
 			    penaltysum += penalty;
 			    ObjFunct->Coefficient.push_back(penalty);
+			    cout << " pushed REACTION_SLACK with penalty " << penalty << endl;
 			  }
+			}
+			else {
+				cout << endl;
 			}
 		}
 	}
@@ -7715,8 +7721,10 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		map<string,Reaction*,std::less<string> > InactiveVar;
 		CalculateGapfillCoefficients(InData,InParameters,InactiveVar,BaseCoefficients,!InParameters->ReactionsUse);
 		vector< vector<string> >* rows = LoadMultipleColumnFile(FOutputFilepath()+"GapfillingCoefficients.txt","\t");
+		cout << "Processing GapfillingCoefficients.txt" << endl;
 		for (int i=1; i < int(rows->size()); i++) {
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
+			cout << (*rows)[i][0].data();
 			if (CurrentRxn != NULL) {
 				vector<int> variables;
 				variables.push_back(FLUX);
@@ -7736,7 +7744,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				for (int j=start; j < stop; j++) {
 					MFAVariable* newvar = CurrentRxn->GetMFAVar(variables[j]);
 					if (newvar != NULL) {
-					        double penalty = atof((*rows)[i][2].data());
+					    double penalty = atof((*rows)[i][2].data());
 						if (BaseCoefficients.count(newvar) > 0) {
 						  penalty = penalty * BaseCoefficients[newvar];
 						}
@@ -7758,6 +7766,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 						}
 						ObjFunct->Variables.push_back(newvar);
 						ObjFunct->Coefficient.push_back(penalty);
+					    cout << " pushed USE of type " << variables[j] << " with penalty " << penalty << endl;
 					}
 				}
 			}
@@ -7829,9 +7838,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	vector<string>* notactivatedrxns = StringToStrings(GetParameter("current rejected reactions"),";"); // high expression, do not carry flux
 	vector<string>* cutrxns = StringToStrings(GetParameter("current cut candidate reactions"),";"); // low expression, do not carry flux
 
-	for (int i=0; i < (*gapfilledrxns).size(); i++) {
-		string ReactionID = (*gapfilledrxns)[i].substr(1,(*gapfilledrxns)[i].length()-1);
-		string Sign = (*gapfilledrxns)[i].substr(0,1);
+	for (int gfri=0; gfri < (*gapfilledrxns).size(); gfri++) {
+		string ReactionID = (*gapfilledrxns)[gfri].substr(1,(*gapfilledrxns)[gfri].length()-1);
+		string Sign = (*gapfilledrxns)[gfri].substr(0,1);
 		for (int i=0; i < FNumVariables(); i++) {
 			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
 				LinEquation* NewConstraint = InitializeLinEquation();
@@ -7842,12 +7851,12 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				//cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
 	}
-	for (int i=0; i < (*activatedrxns).size(); i++) {
-		string ReactionID = (*activatedrxns)[i];
+	for (int ari=0; ari < (*activatedrxns).size(); ari++) {
+		string ReactionID = (*activatedrxns)[ari];
 		for (int i=0; i < FNumVariables(); i++) {
 			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
 				LinEquation* NewConstraint = InitializeLinEquation();
@@ -7858,12 +7867,12 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				//cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
 	}
-	for (int i=0; i < (*notactivatedrxns).size(); i++) {
-		string ReactionID = (*notactivatedrxns)[i];
+	for (int nari=0; nari < (*notactivatedrxns).size(); nari++) {
+		string ReactionID = (*notactivatedrxns)[nari];
 		for (int i=0; i < FNumVariables(); i++) {
 			if ((GetVariable(i)->Type == REVERSE_USE || GetVariable(i)->Type == FORWARD_USE || GetVariable(i)->Type == REACTION_USE)
 					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
@@ -7875,13 +7884,14 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				//cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
 	}
-	for (int i=0; i < (*cutrxns).size(); i++) {
-		string ReactionID = (*cutrxns)[i].substr(1,(*cutrxns)[i].length()-1);
-		string Sign = (*cutrxns)[i].substr(0,1);
+	for (int cri=0; cri < (*cutrxns).size(); cri++) {
+		cout << "Checking cut rxn " << (*cutrxns)[cri] << endl;
+		string ReactionID = (*cutrxns)[cri].substr(1,(*cutrxns)[cri].length()-1);
+		string Sign = (*cutrxns)[cri].substr(0,1);
 		for (int i=0; i < FNumVariables(); i++) {
 			if (((GetVariable(i)->Type == REVERSE_USE && Sign.compare("-") == 0) || (GetVariable(i)->Type == FORWARD_USE  && Sign.compare("+") == 0) || GetVariable(i)->Type == REACTION_USE)
 					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
@@ -7890,10 +7900,10 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->RightHandSide = 0;
 				NewConstraint->EqualityType = EQUAL;
-				//AddConstraint(NewConstraint);
+				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				//cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
 	}
@@ -7918,8 +7928,8 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 
 bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label) {
 	this->ResetSolver();
-	this->LoadSolver();
-	CurrentSolution = RunSolver(true,false,false);
+	this->LoadSolver(false);
+	CurrentSolution = RunSolver(true,false,true);
 	if (currentround == 0) {
 		PrintSolutions(-1,-1,false);
 	}
@@ -7942,6 +7952,7 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 		if (i >= gfstart && ObjFunct->Coefficient[i] > 0) {
 			gfobjective += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
 			if (i < inactstart) {
+				cout << "Checking REACTION_SLACK (type " << ObjFunct->Variables[i]->Type << ") for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with coefficient " << ObjFunct->Coefficient[i] << " and value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
 				if (CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] > threshold) {
 					if (rxns[2].length() > 0) {
 						rxns[2].append(";");
@@ -7950,16 +7961,51 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 					counts[2]++;
 					scores[2] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
 				} else {
-					if (rxns[1].length() > 0) {
-						rxns[1].append(";");
+					// REACTION_SLACK IS 0; but was there really flux?
+					int thereWasFlux = 0;
+					MFAVariable* fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FLUX);
+					if (fluxVar != NULL) {
+						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+							thereWasFlux = 1;
+						}
+						cout << " FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
 					}
-					stay_in_loop = true;
-					rxns[1].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-					counts[1]++;
-					scores[1] += ObjFunct->Coefficient[i];
-					ObjFunct->Coefficient[i] = 0;
+					fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FORWARD_FLUX);
+					if (fluxVar != NULL) {
+						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+							thereWasFlux = 1;
+						}
+						cout << " FORWARD_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
+					}
+					fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(REVERSE_FLUX);
+					if (fluxVar != NULL) {
+						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+							thereWasFlux = 1;
+						}
+						cout << " REVERSE_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
+					}
+
+					if (thereWasFlux == 0) {
+						cout << " weirdness: no flux" << endl;
+						if (rxns[2].length() > 0) {
+							rxns[2].append(";");
+						}
+						rxns[2].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[2]++;
+						scores[2] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					} else {
+						if (rxns[1].length() > 0) {
+							rxns[1].append(";");
+						}
+						stay_in_loop = true;
+						rxns[1].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[1]++;
+						scores[1] += ObjFunct->Coefficient[i];
+						ObjFunct->Coefficient[i] = 0;
+					}
 				}
 			} else {
+				cout << "Checking USE (type " << ObjFunct->Variables[i]->Type << ") for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with coefficient " << ObjFunct->Coefficient[i] << " and value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
 				if (CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] > threshold) {
 					string sign = "+";
 					if (ObjFunct->Variables[i]->Type == REVERSE_FLUX || ObjFunct->Variables[i]->Type == REVERSE_USE) {
@@ -10390,11 +10436,12 @@ void MFAProblem::PrintSolutions(int StartIndex, int EndIndex,bool tightbounds) {
 			}
 			index = 2;
 		}
-		if (index != -1) {
+
 			for (int j=StartIndex; j < EndIndex; j++) {
 				if (GetSolution(j)->Status == SUCCESS && i < int(GetSolution(j)->SolutionData.size())) {
 					Output << ";" << GetSolution(j)->SolutionData[i];
 					
+				  if (index != -1) {
 					if (GetVariable(i)->AssociatedReaction != NULL) {
 						if (int(rxnVarTypePresence[j].size()) == 0) {
 							rxnVarTypePresence[j].resize(4);
@@ -10440,11 +10487,12 @@ void MFAProblem::PrintSolutions(int StartIndex, int EndIndex,bool tightbounds) {
 						}
 						cpdVarTypePresence[j][index][compartmentIndecies[comp]] = true;
 					}
+				  }
 				} else {
 					Output << ";NA";
 				}
 			}
-		}
+
 		Output << endl;
 	}
 	Output.close();

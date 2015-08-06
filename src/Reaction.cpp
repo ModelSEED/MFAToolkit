@@ -3208,17 +3208,17 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 					NewConstraint->Coefficient.push_back(1);
 					NewConstraint->Variables.push_back(fluxvar);
 				}
-				NewConstraint->Coefficient.push_back(-10000);
+				NewConstraint->Coefficient.push_back(-1000);
 				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
 				InProblem->AddConstraint(NewConstraint);
-				NewConstraint = InitializeLinEquation("Associating reverse flux to FORWARD_REACTION",10000,LESS);
+				NewConstraint = InitializeLinEquation("Associating reverse flux to FORWARD_REACTION",1000,LESS);
 				NewConstraint->AssociatedReaction = this;
 				fluxvar = this->GetMFAVar(REVERSE_FLUX);
 				if (fluxvar != NULL) {
 					NewConstraint->Coefficient.push_back(1);
 					NewConstraint->Variables.push_back(fluxvar);
 				}
-				NewConstraint->Coefficient.push_back(10000);
+				NewConstraint->Coefficient.push_back(1000);
 				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
 				InProblem->AddConstraint(NewConstraint);
 			}
