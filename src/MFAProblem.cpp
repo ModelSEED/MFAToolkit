@@ -7907,8 +7907,13 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 			}
 		}
 	}
-	this->LoadSolver(true);
-	CurrentSolution = RunSolver(true,false,false);
+	this->ResetSolver();
+	MinFluxConstraint->RightHandSide = 1e9; // a really big number
+	LoadConstToSolver(MinFluxConstraint->Index);
+	ObjectiveConstraint->RightHandSide = 0; // we're maximizing this anyway
+	LoadConstToSolver(ObjectiveConstraint->Index);
+	this->LoadSolver(false);
+	CurrentSolution = RunSolver(true,false,true);
 	cout << "Final biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
 	if (CurrentSolution->Status != SUCCESS) {
 		SetParameter("expression informed biomass optimization","fail");
