@@ -7825,7 +7825,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 
 	}
 
-	//Run biomass maximization one more time with reaction use variables set according to results of activation and inactivation
+	cout << "Run biomass maximization one more time with reaction use variables set according to results of activation and inactivation" << endl;
 	delete ObjFunct;
 	if (originalsense) {
 		this->SetMax();
@@ -7908,11 +7908,11 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 	}
 	this->ResetSolver();
+	this->LoadSolver(false);
 	MinFluxConstraint->RightHandSide = 1e9; // a really big number
 	LoadConstToSolver(MinFluxConstraint->Index);
 	ObjectiveConstraint->RightHandSide = 0; // we're maximizing this anyway
 	LoadConstToSolver(ObjectiveConstraint->Index);
-	this->LoadSolver(false);
 	CurrentSolution = RunSolver(true,false,true);
 	cout << "Final biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
 	if (CurrentSolution->Status != SUCCESS) {
