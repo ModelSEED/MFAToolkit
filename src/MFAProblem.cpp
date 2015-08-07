@@ -4459,9 +4459,10 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	if (!FMax()) {
 		sense = LESS;
 	}
+	float originalrhs = CurrentSolution->Objective;
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
-	if (InParameters->PROM || InParameters->QuantitativeOptimization || InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
+	if (InParameters->PROM || InParameters->QuantitativeOptimization || (InParameters->ScalePenaltyByFlux && (InParameters->TranscriptomeAnalysis || InParameters->GapFilling))) {
 		ResetSolver();
 		this->RelaxIntegerVariables = true;
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
@@ -4473,8 +4474,12 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 			}
 		}
 		LoadSolver(false);
-		float originalrhs = ObjectiveConstraint->RightHandSide;
-		//Already Fixed objective at maximum value just before this "if" clause
+		float ocrhs = ObjectiveConstraint->RightHandSide;
+		if (InParameters->OptimalObjectiveFraction > 0.99) {
+			originalrhs = 0.99*originalrhs;
+		}
+		ObjectiveConstraint->RightHandSide = originalrhs; // fix biomass (almost) at maximum
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
 		ObjFunct = NULL;
 		this->AddSumObjective(FLUX,false,false,1,false);
@@ -4488,22 +4493,18 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		printf("Flux Min result is %f\n",SumSolution->Objective);
 		MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
 		LoadConstToSolver(MinFluxConstraint->Index);
-		if (InParameters->ScalePenaltyByFlux) {
-		  if (InParameters->OptimalObjectiveFraction > 0.99) {
-		    originalrhs = 0.99*originalrhs;
-		  }
-		  ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
-		  LoadConstToSolver(ObjectiveConstraint->Index);
-		  this->ResetSolver();
-		  Status = LoadSolver();
-		  this->FindTightBounds(InData,InParameters,false,true);
-		  // done with FVA
-		}
-		ObjFunct = CurrentObjective;//Restoring original objective
+		ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
+		LoadConstToSolver(ObjectiveConstraint->Index);
+		this->ResetSolver();
+		Status = LoadSolver();
+		this->FindTightBounds(InData,InParameters,false,true);
+		// done with FVA
+
+		  ObjFunct = CurrentObjective;//Restoring original objective
 		if (sense == GREATER) {
 			this->SetMax();
 		}
-		ObjectiveConstraint->RightHandSide = originalrhs;
+		ObjectiveConstraint->RightHandSide = ocrhs;
 		LoadConstToSolver(ObjectiveConstraint->Index);
 		ResetSolver();
 		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
@@ -7654,12 +7655,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		MinFluxConstraint->RightHandSide = MinFluxConstraint->RightHandSide*1.2;
 		LoadConstToSolver(MinFluxConstraint->Index);
 	}
-	double original_objective;
-	if (this->ObjectiveConstraint != NULL) {
-	  original_objective = ObjectiveConstraint->RightHandSide;
-	  this->ObjectiveConstraint->RightHandSide = 0.001*ObjectiveConstraint->RightHandSide; // one thousandth because really we just want at least minimal growth
-	  LoadConstToSolver(this->ObjectiveConstraint->Index);
-	}
 	double omegap = 1-InParameters->omega;
 	int gfstart = 0;
 	int inactstart = 0;
@@ -7907,28 +7902,58 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 			}
 		}
 	}
+
+	// optimize biomass with expression constraints
 	this->ResetSolver();
 	this->LoadSolver(false);
-	MinFluxConstraint->RightHandSide = 1e9; // a really big number
-	LoadConstToSolver(MinFluxConstraint->Index);
+	if (MinFluxConstraint != NULL) {
+		MinFluxConstraint->RightHandSide = 1e9; // a really big number
+		LoadConstToSolver(MinFluxConstraint->Index);
+	}
 	ObjectiveConstraint->RightHandSide = 0; // we're maximizing this anyway
 	LoadConstToSolver(ObjectiveConstraint->Index);
 	CurrentSolution = RunSolver(true,false,true);
-	cout << "Final biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
+	cout << "biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
 	if (CurrentSolution->Status != SUCCESS) {
 		SetParameter("expression informed biomass optimization","fail");
 		return FAIL;
 	}
-	//Restoring original problem
-	if (MinFluxConstraint != NULL) {
-		MinFluxConstraint->RightHandSide = original_min_flux;
-		LoadConstToSolver(MinFluxConstraint->Index);
+
+	// minimize fluxes with expression constraints
+	ResetSolver();
+	this->RelaxIntegerVariables = true;
+	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
+		for (int i=0; i < Variables.size(); i++) {
+			if (Variables[i]->Type == FORWARD_REACTION) {
+				Variables[i]->UpperBound = CurrentSolution->SolutionData[Variables[i]->Index];
+				Variables[i]->LowerBound = CurrentSolution->SolutionData[Variables[i]->Index];
+			}
+		}
 	}
-	if (ObjectiveConstraint != NULL) {
-	  ObjectiveConstraint->RightHandSide = original_objective;
-		LoadConstToSolver(ObjectiveConstraint->Index);
-	}
-	this->loadBounds(bounds,true);
+	LoadSolver(false);
+	float originalrhs = CurrentSolution->Objective;
+	ObjectiveConstraint->RightHandSide = originalrhs*.99; // fix biomass (almost) at maximum
+	LoadConstToSolver(ObjectiveConstraint->Index);
+	LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
+	ObjFunct = NULL;
+	this->AddSumObjective(FLUX,false,false,1,false);
+	this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
+	this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
+	this->SetMin();
+	int Status = LoadObjective();
+	cout << "Running Flux Minimization with expression constraints" << endl;
+	OptSolutionData* SumSolution = RunSolver(true,true,true);
+	printf("Flux Min result is %f\n",SumSolution->Objective);
+	MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
+	LoadConstToSolver(MinFluxConstraint->Index);
+	ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
+	LoadConstToSolver(ObjectiveConstraint->Index);
+	this->RelaxIntegerVariables = false;
+	this->ResetSolver();
+	Status = LoadSolver(false);
+	cout << "Running FVA with expression constraints" << endl;
+	this->FindTightBounds(InData,InParameters,false,true);
+	cout << "Done with FVA" << endl;
 }
 
 bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label) {
