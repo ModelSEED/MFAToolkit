@@ -7843,9 +7843,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->RightHandSide = 0;
 				NewConstraint->EqualityType = EQUAL;
-				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				AddConstraint(NewConstraint);
 				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
@@ -7859,9 +7859,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->RightHandSide = 0;
 				NewConstraint->EqualityType = EQUAL;
-				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				AddConstraint(NewConstraint);
 				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
@@ -7876,9 +7876,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->RightHandSide = 0;
 				NewConstraint->EqualityType = EQUAL;
-				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				AddConstraint(NewConstraint);
 				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
@@ -7895,9 +7895,9 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 				NewConstraint->Coefficient.push_back(1);
 				NewConstraint->RightHandSide = 0;
 				NewConstraint->EqualityType = EQUAL;
-				AddConstraint(NewConstraint);
 				NewConstraint->ConstraintType = LINEAR;
 				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
+				AddConstraint(NewConstraint);
 				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
@@ -7981,42 +7981,54 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 	for (int i=0; i < this->ObjFunct->Variables.size(); i++) {
 		if (i >= gfstart && ObjFunct->Coefficient[i] > 0) {
 			gfobjective += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+			// double check whether there is flux through the reaction
+			cout << "Checking flux variables for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			int thereWasFlux = 0;
+			MFAVariable* fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FLUX);
+			if (fluxVar != NULL) {
+				if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+					thereWasFlux = 1;
+				}
+				cout << " FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
+			}
+			fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FORWARD_FLUX);
+			if (fluxVar != NULL) {
+				if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+					thereWasFlux = 1;
+				}
+				cout << " FORWARD_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
+			}
+			fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(REVERSE_FLUX);
+			if (fluxVar != NULL) {
+				if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
+					thereWasFlux = 1;
+				}
+				cout << " REVERSE_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
+			}
 			if (i < inactstart) {
-				cout << "Checking REACTION_SLACK (type " << ObjFunct->Variables[i]->Type << ") for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with coefficient " << ObjFunct->Coefficient[i] << " and value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
+				cout << " checking REACTION_SLACK for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
 				if (CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] > threshold) {
-					if (rxns[2].length() > 0) {
-						rxns[2].append(";");
-					}
-					rxns[2].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-					counts[2]++;
-					scores[2] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					// REACTION_SLACK IS 1; but was there really no flux?
+					if (thereWasFlux == 1) {
+						cout << " weirdness: REACTION_SLACK but flux" << endl;
+						if (rxns[1].length() > 0) {
+							rxns[1].append(";");
+						}
+						rxns[1].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[1]++;
+						scores[1] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					} else {
+						if (rxns[2].length() > 0) {
+							rxns[2].append(";");
+						}
+						rxns[2].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[2]++;
+						scores[2] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+						}
 				} else {
 					// REACTION_SLACK IS 0; but was there really flux?
-					int thereWasFlux = 0;
-					MFAVariable* fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FLUX);
-					if (fluxVar != NULL) {
-						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
-							thereWasFlux = 1;
-						}
-						cout << " FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
-					}
-					fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(FORWARD_FLUX);
-					if (fluxVar != NULL) {
-						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
-							thereWasFlux = 1;
-						}
-						cout << " FORWARD_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
-					}
-					fluxVar = ObjFunct->Variables[i]->AssociatedReaction->GetMFAVar(REVERSE_FLUX);
-					if (fluxVar != NULL) {
-						if (CurrentSolution->SolutionData[fluxVar->Index] >= MFA_ZERO_TOLERANCE) {
-							thereWasFlux = 1;
-						}
-						cout << " REVERSE_FLUX is " << CurrentSolution->SolutionData[fluxVar->Index] << endl;
-					}
-
 					if (thereWasFlux == 0) {
-						cout << " weirdness: no flux" << endl;
+						cout << " weirdness: no REACTION_SLACK but no flux" << endl;
 						if (rxns[2].length() > 0) {
 							rxns[2].append(";");
 						}
@@ -8035,31 +8047,53 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 					}
 				}
 			} else {
-				cout << "Checking USE (type " << ObjFunct->Variables[i]->Type << ") for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with coefficient " << ObjFunct->Coefficient[i] << " and value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
+				cout << " checking USE (type " << ObjFunct->Variables[i]->Type << ") for " << ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING) << " with value " << CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] << endl;
 				if (CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index] > threshold) {
 					string sign = "+";
 					if (ObjFunct->Variables[i]->Type == REVERSE_FLUX || ObjFunct->Variables[i]->Type == REVERSE_USE) {
 						sign = "-";
 					}
-					stay_in_loop = true;
-					if (rxns[0].length() > 0) {
-						rxns[0].append(";");
+					// REACTION_USE IS 1; but was there really flux?
+					if (thereWasFlux == 0) {
+						cout << " weirdness: REACTION_USE but no flux" << endl;
+						if (rxns[3].length() > 0) {
+							rxns[3].append(";");
+						}
+						rxns[3].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[3]++;
+						scores[3] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					} else {
+						stay_in_loop = true;
+						if (rxns[0].length() > 0) {
+							rxns[0].append(";");
+						}
+						rxns[0].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[0]++;
+						scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+						ObjFunct->Coefficient[i] = 0;
 					}
-					rxns[0].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-					counts[0]++;
-					scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
-					ObjFunct->Coefficient[i] = 0;
 				} else {
 					string sign = "+";
 					if (ObjFunct->Variables[i]->Type == REVERSE_FLUX || ObjFunct->Variables[i]->Type == REVERSE_USE) {
 						sign = "-";
 					}
-					if (rxns[3].length() > 0) {
-						rxns[3].append(";");
+					// REACTION_USE IS 0; but was there really no flux?
+					if (thereWasFlux == 1) {
+						cout << " weirdness: no REACTION_USE but flux" << endl;
+						if (rxns[0].length() > 0) {
+							rxns[0].append(";");
+						}
+						rxns[0].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[0]++;
+						scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					} else {
+						if (rxns[3].length() > 0) {
+							rxns[3].append(";");
+						}
+						rxns[3].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+						counts[3]++;
+						scores[3] += ObjFunct->Coefficient[i];
 					}
-					rxns[3].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-					counts[3]++;
-					scores[3] += ObjFunct->Coefficient[i];
 				}
 			}
 		}
