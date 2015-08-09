@@ -4462,6 +4462,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	float originalrhs = CurrentSolution->Objective;
 	ObjectiveConstraint = MakeObjectiveConstraint(InParameters->OptimalObjectiveFraction*CurrentSolution->Objective,sense);
 	LoadConstToSolver(ObjectiveConstraint->Index);
+	LinEquation* CurrentObjective = ObjFunct;
 	if (InParameters->PROM || InParameters->QuantitativeOptimization || (InParameters->ScalePenaltyByFlux && (InParameters->TranscriptomeAnalysis || InParameters->GapFilling))) {
 		ResetSolver();
 		this->RelaxIntegerVariables = true;
@@ -4480,7 +4481,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		}
 		ObjectiveConstraint->RightHandSide = originalrhs; // fix biomass (almost) at maximum
 		LoadConstToSolver(ObjectiveConstraint->Index);
-		LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
+
 		ObjFunct = NULL;
 		this->AddSumObjective(FLUX,false,false,1,false);
 		this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
@@ -4521,8 +4522,14 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	if (InParameters->PROM) {
 		this->AddPROMConstraints(InData,InParameters,CurrentSolution);//Add the PROM constraints tightening bounds based on TF status
 	}
+	if (InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
+		this->GapFilling(InData,InParameters,CurrentSolution);//testing
+	}
 	if (InParameters->DoMinimizeFlux) {
-		LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
+		//For flux minimization, we force the current objective to a near maximal value
+		ObjectiveConstraint->RightHandSide = CurrentOptimum;
+		LoadConstToSolver(ObjectiveConstraint->Index);
+		CurrentObjective = ObjFunct;//Backing up old objective
 		ObjFunct = NULL;
 		this->AddSumObjective(FLUX,false,false,1,false);
 		this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
@@ -4530,56 +4537,38 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		this->SetMin();
 		int Status = LoadObjective();
 		CurrentSolution = RunSolver(true,true,true);
-		if (MinFluxConstraint == NULL) {
-			MinFluxConstraint = MakeObjectiveConstraint(CurrentSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
-		} else {
-			MinFluxConstraint->RightHandSide = CurrentSolution->Objective*InParameters->MinFluxMultiplier;
-		}
-		CurrentSolution->Objective = 0;
-		for (int i=0; i < int(ObjectiveConstraint->Variables.size()); i++) {
-			CurrentSolution->Objective += ObjectiveConstraint->Coefficient[i]*CurrentSolution->SolutionData[ObjectiveConstraint->Variables[i]->Index];
-		}
-		LoadConstToSolver(MinFluxConstraint->Index);
-		if (InParameters->OptimalObjectiveFraction > 0.99) {
-			ObjectiveConstraint->RightHandSide = 0.99*ObjectiveConstraint->RightHandSide;
-		}
-		LoadConstToSolver(ObjectiveConstraint->Index);
-		ObjFunct = CurrentObjective;//Restoring original objective
-		if (sense == GREATER) {
-			this->SetMax();
-		}
-		this->ResetSolver();
-		Status = LoadSolver();
+		CurrentSolution->Objective = CurrentOptimum;
+ 		ObjFunct = CurrentObjective;
+ 		if (sense == GREATER) {
+ 			this->SetMax();
+ 		}
+ 		Status = LoadObjective();
 	}
+	PrintSolutions(FNumSolutions()-1,FNumSolutions());
 
 	//Now we enter the "exclusive analyses" which cannot be mixed and matched
-	if (InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
-		this->GapFilling(InData,InParameters,CurrentSolution);//testing
-	} else if (InParameters->GapGeneration) {
+	if (InParameters->GapGeneration) {
 		this->GapGeneration(InData,InParameters);//TODO
 	} else if (InParameters->QuantitativeOptimization) {
 		this->QuantitativeModelOptimization(InData,InParameters);
 	} else if (InParameters->DetermineMinimalMedia) {
-		PrintSolutions(FNumSolutions()-1,FNumSolutions());
 		this->DetermineMinimalFeasibleMedia(InData,InParameters,false);//working
 	} else if (InParameters->PhenotypeAnalysis) {
-		PrintSolutions(FNumSolutions()-1,FNumSolutions());
 		this->RunDeletionExperiments(InData,InParameters,false);//TODO
 	} else if (InParameters->PerformSingleKO) {
-		PrintSolutions(FNumSolutions()-1,FNumSolutions());
+		ObjectiveConstraint->RightHandSide = 0.1*CurrentOptimum;
 		this->CombinatorialKO(1,InData);//working
 	} else if (InParameters->FluxVariabilityAnalysis) {
-		PrintSolutions(FNumSolutions()-1,FNumSolutions());
+		ObjectiveConstraint->RightHandSide = 0.1*CurrentOptimum;
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		this->FindTightBounds(InData,InParameters,false,true);//working
 	} else if (InParameters->DoCalculateSensitivity) {
-		PrintSolutions(FNumSolutions()-1,FNumSolutions());
 		this->CalculateFluxSensitivity(InData,Variables,CurrentSolution->Objective);//working
 	} else if (InParameters->DoFluxCouplingAnalysis) {
 		string note;
 		this->FluxCouplingAnalysis(InData,InParameters,false,note,false);//TODO
 	}
-	//PrintSolutions(FNumSolutions()-1,FNumSolutions());//working
-	PrintSolutions(-1,-1);//working
+	//PrintSolutions(-1,-1);//working
 }
 
 //This function assumes that the desired objective function has already been loaded
@@ -7648,13 +7637,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	LinEquation* OldObjective = GetObjective();
 	ObjFunct = NULL;
 	bool originalsense = this->FMax();
-	//Relaxing min flux constraint
-	double original_min_flux;
-	if (MinFluxConstraint != NULL) {
-		original_min_flux = MinFluxConstraint->RightHandSide;
-		MinFluxConstraint->RightHandSide = MinFluxConstraint->RightHandSide*1.2;
-		LoadConstToSolver(MinFluxConstraint->Index);
-	}
 	double omegap = 1-InParameters->omega;
 	int gfstart = 0;
 	int inactstart = 0;
@@ -7700,6 +7682,15 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 	}
 	inactstart = int(ObjFunct->Variables.size());
+	vector<int> variables;
+	variables.push_back(FLUX);
+	variables.push_back(FORWARD_FLUX);
+	variables.push_back(REVERSE_FLUX);
+	if (InParameters->ReactionsUse) {
+		variables[0] = REACTION_USE;
+		variables[1] = FORWARD_USE;
+		variables[2] = REVERSE_USE;
+	}
 	if (InParameters->alpha < 1) {
 	  // compute max flux
 	  double maxbound = 0;
@@ -7721,15 +7712,6 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 			Reaction* CurrentRxn = InData->FindReaction("DATABASE",(*rows)[i][0].data());
 			cout << (*rows)[i][0].data();
 			if (CurrentRxn != NULL) {
-				vector<int> variables;
-				variables.push_back(FLUX);
-				variables.push_back(FORWARD_FLUX);
-				variables.push_back(REVERSE_FLUX);
-				if (InParameters->ReactionsUse) {
-					variables[0] = REACTION_USE;
-					variables[1] = FORWARD_USE;
-					variables[2] = REVERSE_USE;
-				}
 				int start = 0;
 				int stop = 2;
 				if ((*rows)[i][1].compare("reverse") == 0) {
@@ -7834,126 +7816,95 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	vector<string>* cutrxns = StringToStrings(GetParameter("current cut candidate reactions"),";"); // low expression, do not carry flux
 
 	for (int gfri=0; gfri < (*gapfilledrxns).size(); gfri++) {
-		string ReactionID = (*gapfilledrxns)[gfri].substr(1,(*gapfilledrxns)[gfri].length()-1);
-		string Sign = (*gapfilledrxns)[gfri].substr(0,1);
-		for (int i=0; i < FNumVariables(); i++) {
-			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
-				LinEquation* NewConstraint = InitializeLinEquation();
-				NewConstraint->Variables.push_back(GetVariable(i));
-				NewConstraint->Coefficient.push_back(1);
-				NewConstraint->RightHandSide = 0;
-				NewConstraint->EqualityType = EQUAL;
-				NewConstraint->ConstraintType = LINEAR;
-				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				AddConstraint(NewConstraint);
-				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+		string ReactionID = (*gapfilledrxns)[gfri];
+		string Sign = ReactionID.substr(0,1);
+		ReactionID = ReactionID.substr(1,ReactionID.length()-1);
+		Reaction* current = InData->FindReaction("DATABASE",ReactionID.data());
+		if (current != NULL) {
+			MFAVariable* currvar = current->GetMFAVar(REACTION_SLACK);
+			if (currvar != NULL) {
+				currvar->UpperBound = 0;
+				currvar->LowerBound = 0;
+				this->LoadVariable(currvar->Index);
+				cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+			}
+			for (int vi=0; vi < int(variables.size()); vi++) {
+				MFAVariable* currvar = current->GetMFAVar(variables[vi]);
+				if (currvar != NULL) {
+					if ((Sign.compare("+") == 0 && vi == 2) || (Sign.compare("-") == 0 && vi < 2)) {
+						currvar->UpperBound = 0;
+						currvar->LowerBound = 0;
+						this->LoadVariable(currvar->Index);
+						cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+					}
+				}
 			}
 		}
 	}
+	//Forcing activated reactions to nonzero flux by setting slack to zero
 	for (int ari=0; ari < (*activatedrxns).size(); ari++) {
 		string ReactionID = (*activatedrxns)[ari];
-		for (int i=0; i < FNumVariables(); i++) {
-			if (GetVariable(i)->Type == REACTION_SLACK && (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
-				LinEquation* NewConstraint = InitializeLinEquation();
-				NewConstraint->Variables.push_back(GetVariable(i));
-				NewConstraint->Coefficient.push_back(1);
-				NewConstraint->RightHandSide = 0;
-				NewConstraint->EqualityType = EQUAL;
-				NewConstraint->ConstraintType = LINEAR;
-				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				AddConstraint(NewConstraint);
-				cout << "Set REACTION_SLACK to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+		cout << "Checking activated rxn " << ReactionID << endl;
+		Reaction* current = InData->FindReaction("DATABASE",ReactionID.data());
+		if (current != NULL) {
+			MFAVariable* currvar = current->GetMFAVar(REACTION_SLACK);
+			if (currvar != NULL) {
+				currvar->UpperBound = 0;
+				currvar->LowerBound = 0;
+				this->LoadVariable(currvar->Index);
+				cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 		}
 	}
-	for (int nari=0; nari < (*notactivatedrxns).size(); nari++) {
+	//Forcing cut reactions to zero flux either through flux directly or through use variables
+	for (int nari=0; nari < notactivatedrxns->size(); nari++) {
 		string ReactionID = (*notactivatedrxns)[nari];
-		for (int i=0; i < FNumVariables(); i++) {
-			if ((GetVariable(i)->Type == REVERSE_USE || GetVariable(i)->Type == FORWARD_USE || GetVariable(i)->Type == REACTION_USE)
-					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
-				LinEquation* NewConstraint = InitializeLinEquation();
-				NewConstraint->Variables.push_back(GetVariable(i));
-				NewConstraint->Coefficient.push_back(1);
-				NewConstraint->RightHandSide = 0;
-				NewConstraint->EqualityType = EQUAL;
-				NewConstraint->ConstraintType = LINEAR;
-				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				AddConstraint(NewConstraint);
-				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+		cout << "Checking not-actived rxn " << ReactionID << endl;
+		Reaction* current = InData->FindReaction("DATABASE",ReactionID.data());
+		if (current != NULL) {
+			for (int vi=0; vi < int(variables.size()); vi++) {
+				MFAVariable* currvar = current->GetMFAVar(variables[vi]);
+				if (currvar != NULL) {
+					currvar->UpperBound = 0;
+					currvar->LowerBound = 0;
+					this->LoadVariable(currvar->Index);
+					cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+				}
 			}
 		}
 	}
+	//Forcing cut reactions to zero flux either through flux directly or through use variables
 	for (int cri=0; cri < (*cutrxns).size(); cri++) {
 		cout << "Checking cut rxn " << (*cutrxns)[cri] << endl;
 		string ReactionID = (*cutrxns)[cri].substr(1,(*cutrxns)[cri].length()-1);
 		string Sign = (*cutrxns)[cri].substr(0,1);
-		for (int i=0; i < FNumVariables(); i++) {
-			if (((GetVariable(i)->Type == REVERSE_USE && Sign.compare("-") == 0) || (GetVariable(i)->Type == FORWARD_USE  && Sign.compare("+") == 0) || GetVariable(i)->Type == REACTION_USE)
-					&& (GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING).compare(ReactionID) == 0)) {
-				LinEquation* NewConstraint = InitializeLinEquation();
-				NewConstraint->Variables.push_back(GetVariable(i));
-				NewConstraint->Coefficient.push_back(1);
-				NewConstraint->RightHandSide = 0;
-				NewConstraint->EqualityType = EQUAL;
-				NewConstraint->ConstraintType = LINEAR;
-				NewConstraint->ConstraintMeaning.assign("Expression-informed FBA");
-				AddConstraint(NewConstraint);
-				cout << "Set reaction use variable of type " << GetVariable(i)->Type << " to zero for " << GetVariable(i)->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+		Reaction* current = InData->FindReaction("DATABASE",ReactionID.data());
+		if (current != NULL) {
+			for (int vi=0; vi < int(variables.size()); vi++) {
+				MFAVariable* currvar = current->GetMFAVar(variables[vi]);
+				if (currvar != NULL) {
+					if ((Sign.compare("+") == 0 && vi < 2) || (Sign.compare("-") == 0 && vi == 2)) {
+						currvar->UpperBound = 0;
+						currvar->LowerBound = 0;
+						this->LoadVariable(currvar->Index);
+						cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
+					}
+				}
 			}
 		}
 	}
-
-	// optimize biomass with expression constraints
-	this->ResetSolver();
-	this->LoadSolver(false);
-	if (MinFluxConstraint != NULL) {
-		MinFluxConstraint->RightHandSide = 1e9; // a really big number
-		LoadConstToSolver(MinFluxConstraint->Index);
-	}
 	ObjectiveConstraint->RightHandSide = 0; // we're maximizing this anyway
 	LoadConstToSolver(ObjectiveConstraint->Index);
+	this->ResetSolver();
+	this->LoadSolver();
 	CurrentSolution = RunSolver(true,false,true);
 	cout << "biomass flux with expression constraints: " << CurrentSolution->Objective << endl;
 	if (CurrentSolution->Status != SUCCESS) {
 		SetParameter("expression informed biomass optimization","fail");
 		return FAIL;
 	}
-
-	// minimize fluxes with expression constraints
-	ResetSolver();
-	this->RelaxIntegerVariables = true;
-	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
-		for (int i=0; i < Variables.size(); i++) {
-			if (Variables[i]->Type == FORWARD_REACTION) {
-				Variables[i]->UpperBound = CurrentSolution->SolutionData[Variables[i]->Index];
-				Variables[i]->LowerBound = CurrentSolution->SolutionData[Variables[i]->Index];
-			}
-		}
-	}
-	LoadSolver(false);
-	float originalrhs = CurrentSolution->Objective;
-	ObjectiveConstraint->RightHandSide = originalrhs*.99; // fix biomass (almost) at maximum
-	LoadConstToSolver(ObjectiveConstraint->Index);
-	LinEquation* CurrentObjective = ObjFunct;//Backing up old objective
-	ObjFunct = NULL;
-	this->AddSumObjective(FLUX,false,false,1,false);
-	this->AddSumObjective(REVERSE_FLUX,false,true,1,false);
-	this->AddSumObjective(FORWARD_FLUX,false,true,1,false);
-	this->SetMin();
-	int Status = LoadObjective();
-	cout << "Running Flux Minimization with expression constraints" << endl;
-	OptSolutionData* SumSolution = RunSolver(true,true,true);
-	printf("Flux Min result is %f\n",SumSolution->Objective);
-	MinFluxConstraint = MakeObjectiveConstraint(SumSolution->Objective*InParameters->MinFluxMultiplier,LESS);//Setting constraint fixing min fluxes
-	LoadConstToSolver(MinFluxConstraint->Index);
-	ObjectiveConstraint->RightHandSide = originalrhs*.1; // prepare for FVA
-	LoadConstToSolver(ObjectiveConstraint->Index);
-	this->RelaxIntegerVariables = false;
-	this->ResetSolver();
-	Status = LoadSolver(false);
-	cout << "Running FVA with expression constraints" << endl;
-	this->FindTightBounds(InData,InParameters,false,true);
-	cout << "Done with FVA" << endl;
+	CurrentOptimum = CurrentSolution->Objective;
+	return SUCCESS;
 }
 
 bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label) {
@@ -7968,7 +7919,7 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 		return false;
 	}
 	bool stay_in_loop = false;
-	//RR,AR,RJ,CC
+	//RR:on and rejected,AR:on and activated,RJ:off and activate or activated candidates,CC:candidate reaction cut
 	string rxns [4] = { "","","","" };
 	int counts [4] = { 0,0,0,0 };
 	float scores [4] = { 0,0,0,0 };
@@ -7979,6 +7930,7 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 		objective += ObjectiveConstraint->Coefficient[i]*CurrentSolution->SolutionData[ObjectiveConstraint->Variables[i]->Index];
 	}
 	for (int i=0; i < this->ObjFunct->Variables.size(); i++) {
+		cout << ObjFunct->Coefficient[i] << "\t" << ObjFunct->Variables[i]->Type << endl;
 		if (i >= gfstart && ObjFunct->Coefficient[i] > 0) {
 			gfobjective += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
 			// double check whether there is flux through the reaction
@@ -8053,47 +8005,25 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 					if (ObjFunct->Variables[i]->Type == REVERSE_FLUX || ObjFunct->Variables[i]->Type == REVERSE_USE) {
 						sign = "-";
 					}
-					// REACTION_USE IS 1; but was there really flux?
-					if (thereWasFlux == 0) {
-						cout << " weirdness: REACTION_USE but no flux" << endl;
-						if (rxns[3].length() > 0) {
-							rxns[3].append(";");
-						}
-						rxns[3].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-						counts[3]++;
-						scores[3] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
-					} else {
-						stay_in_loop = true;
-						if (rxns[0].length() > 0) {
-							rxns[0].append(";");
-						}
-						rxns[0].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-						counts[0]++;
-						scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
-						ObjFunct->Coefficient[i] = 0;
+					stay_in_loop = true;
+					if (rxns[0].length() > 0) {
+						rxns[0].append(";");
 					}
+					rxns[0].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+					counts[0]++;
+					scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
+					ObjFunct->Coefficient[i] = 0;
 				} else {
 					string sign = "+";
 					if (ObjFunct->Variables[i]->Type == REVERSE_FLUX || ObjFunct->Variables[i]->Type == REVERSE_USE) {
 						sign = "-";
 					}
-					// REACTION_USE IS 0; but was there really no flux?
-					if (thereWasFlux == 1) {
-						cout << " weirdness: no REACTION_USE but flux" << endl;
-						if (rxns[0].length() > 0) {
-							rxns[0].append(";");
-						}
-						rxns[0].append(ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-						counts[0]++;
-						scores[0] += ObjFunct->Coefficient[i]*CurrentSolution->SolutionData[ObjFunct->Variables[i]->Index];
-					} else {
-						if (rxns[3].length() > 0) {
-							rxns[3].append(";");
-						}
-						rxns[3].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
-						counts[3]++;
-						scores[3] += ObjFunct->Coefficient[i];
+					if (rxns[3].length() > 0) {
+						rxns[3].append(";");
 					}
+					rxns[3].append(sign+ObjFunct->Variables[i]->AssociatedReaction->GetData("DATABASE",STRING));
+					counts[3]++;
+					scores[3] += ObjFunct->Coefficient[i];
 				}
 			}
 		}

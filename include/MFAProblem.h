@@ -49,6 +49,7 @@ private:
 	vector<ProblemState*> ProblemStates;
 	int MFAProblemClockIndex;
 
+	double CurrentOptimum;
 	LinEquation* MinFluxConstraint;
 	LinEquation* ObjectiveConstraint;
 public:
