@@ -4454,6 +4454,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 		}
 		return FAIL;
 	}
+	CurrentOptimum = CurrentSolution->Objective;
 	//Fixing objective at max
 	int sense = GREATER;
 	if (!FMax()) {
