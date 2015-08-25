@@ -3606,6 +3606,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 	vector<string> outputVector;
 	OptSolutionData* NewSolution = NULL;
 	outputVector.push_back("Label\tGenes\tKO reactions\tMedia\tWT growth\tGrowth\tNo growth metabolites\tNew inactive reactions\tNew essential genes\tFluxes");
+	InParameters->MaxDrainFlux = 0;
 	this->clearOldMedia(InParameters);
 	SavedBounds* currentBounds = this->saveBounds();
 	bool originalSense = this->FMax();

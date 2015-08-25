@@ -1598,7 +1598,7 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 	if (InParameters->OptimalObjectiveFraction >= 1) {
 		InParameters->OptimalObjectiveFraction = 0.99;
 	}
-	if (InParameters->alpha > 0) {
+	if (InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
 		InParameters->ReactionSlackVariable = 1;
 	}
 	if (InParameters->MinFluxMultiplier < 1) {
