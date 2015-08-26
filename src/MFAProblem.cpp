@@ -4556,9 +4556,12 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	} else if (InParameters->DetermineMinimalMedia) {
 		this->DetermineMinimalFeasibleMedia(InData,InParameters,false);//working
 	} else if (InParameters->PhenotypeAnalysis) {
+		ObjectiveConstraint->RightHandSide = 0;
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		this->RunDeletionExperiments(InData,InParameters,false);//TODO
 	} else if (InParameters->PerformSingleKO) {
 		ObjectiveConstraint->RightHandSide = 0.1*CurrentOptimum;
+		LoadConstToSolver(ObjectiveConstraint->Index);
 		this->CombinatorialKO(1,InData);//working
 	} else if (InParameters->FluxVariabilityAnalysis) {
 		ObjectiveConstraint->RightHandSide = 0.1*CurrentOptimum;
