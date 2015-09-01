@@ -3189,12 +3189,20 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 				fluxvar = this->GetMFAVar(FLUX);
 			}
 			if (fluxvar != NULL) {
-				NewConstraint->Coefficient.push_back(SLACK_FLUX_COEFFICIENT);
+				if (this->IsBiomassReaction()) {
+					NewConstraint->Coefficient.push_back(10);
+				} else {
+					NewConstraint->Coefficient.push_back(SLACK_FLUX_COEFFICIENT);
+				}
 				NewConstraint->Variables.push_back(fluxvar);
 			}
 			fluxvar = this->GetMFAVar(REVERSE_FLUX);
 			if (fluxvar != NULL) {
-				NewConstraint->Coefficient.push_back(SLACK_FLUX_COEFFICIENT);
+				if (this->IsBiomassReaction()) {
+					NewConstraint->Coefficient.push_back(10);
+				} else {
+					NewConstraint->Coefficient.push_back(SLACK_FLUX_COEFFICIENT);
+				}
 				NewConstraint->Variables.push_back(fluxvar);
 			}
 			NewConstraint->Coefficient.push_back(1);
