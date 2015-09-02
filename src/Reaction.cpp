@@ -1747,15 +1747,7 @@ int Reaction::FCompartment() {
 }
 
 bool Reaction::IsBiomassReaction() {
-	if (GetData("DATABASE",STRING).length() == 8 && GetData("DATABASE",STRING).compare("bio") == 0) {
-		return true;
-	}
-	for (int i=0; i < FNumReactants(PRODUCTS_AND_REACTANTS); i++) {
-	  if (GetReactant(i)->GetData("DATABASE",STRING).compare(0,8,"cpd11416") == 0) {
-			return true;
-		}
-	}
-	if (this == MainData->FindReaction("NAME","Biomass")) {
+	if (GetData("DATABASE",STRING).compare("bio1") == 0 || GetData("DATABASE",STRING).compare("bio2") == 0 || GetData("NAME",STRING).compare("Biomass") == 0) {
 		return true;
 	}
 	return false;
