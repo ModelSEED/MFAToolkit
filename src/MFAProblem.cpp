@@ -4250,6 +4250,67 @@ int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParamete
 	}
 	AddUptakeLimitConstraints();
 	ConvertStringToObjective(GetParameter("objective"), InData);
+	AddMassBalanceConstraint("C", InData);
+}
+
+int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
+  // two inequalities to constrain absolute value
+  LinEquation* newConstraint = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
+  LinEquation* newConstraintReciprocal = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
+  // start with drain variables; 
+  for (int j=0; j < this->FNumVariables();j++) {
+    MFAVariable* currVar = this->GetVariable(j);
+    if ((currVar->Type == FORWARD_DRAIN_FLUX || currVar->Type == DRAIN_FLUX) && currVar->AssociatedSpecies != NULL) {
+      int atomCount = currVar->AssociatedSpecies->CountAtomType(ID);
+      cout << "(1) pushing " << atomCount << " for " << currVar->AssociatedSpecies->GetData("DATABASE",STRING) << endl;
+      newConstraint->Variables.push_back(currVar);
+      newConstraint->Coefficient.push_back(atomCount);
+      newConstraintReciprocal->Variables.push_back(currVar);
+      newConstraintReciprocal->Coefficient.push_back(-atomCount);
+    }
+    if ((currVar->Type == REVERSE_DRAIN_FLUX) && currVar->AssociatedSpecies != NULL) {
+      int atomCount = currVar->AssociatedSpecies->CountAtomType(ID);
+      cout << "(2) pushing " << atomCount << " for " << currVar->AssociatedSpecies->GetData("DATABASE",STRING) << endl;
+      newConstraint->Variables.push_back(currVar);
+      newConstraint->Coefficient.push_back(-atomCount);
+      newConstraintReciprocal->Variables.push_back(currVar);
+      newConstraintReciprocal->Coefficient.push_back(atomCount);
+    }
+  }
+
+  // include all reactants and products of the biomass reaction
+  for (int i=0; i < InData->FNumReactions(); i++) {
+    Reaction* reaction = InData->GetReaction(i);
+    double biomass = 0;
+    if (reaction->GetData("DATABASE",STRING).length() > 3 && reaction->GetData("DATABASE",STRING).substr(0,3).compare("bio") == 0) {
+      MFAVariable* currVar = reaction->GetMFAVar(FLUX);
+      if (currVar == NULL) {
+	currVar = reaction->GetMFAVar(FORWARD_FLUX);
+      }
+      for (int j=0; j < reaction->FNumReactants(REACTANT); j++) {
+	Species* reactant = reaction->GetReactant(j);
+	int atomCount = reactant->CountAtomType(ID);
+	double flux = atomCount * reaction->GetReactantCoef(j);
+	cout << "(3) pushing " << flux << " for " << reactant->GetData("DATABASE",STRING) << endl;
+	biomass += flux;
+      }
+      for (int j = reaction->FNumReactants(REACTANT); j < reaction->FNumReactants(); j++) {
+	Species* product = reaction->GetReactant(j);
+	int atomCount = product->CountAtomType(ID);
+	double flux = atomCount * reaction->GetReactantCoef(j);
+	cout << "(4) pushing " << flux << " for " << product->GetData("DATABASE",STRING) << endl;
+	biomass -= flux;
+      }
+      newConstraint->Variables.push_back(currVar);
+      newConstraint->Coefficient.push_back(biomass);
+      newConstraintReciprocal->Variables.push_back(currVar);
+      newConstraintReciprocal->Coefficient.push_back(-biomass);
+    }
+  }
+
+  this->AddConstraint(newConstraint);
+  this->AddConstraint(newConstraintReciprocal);
+  return SUCCESS;
 }
 
 int MFAProblem::AddUptakeLimitConstraints() {

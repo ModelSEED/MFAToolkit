@@ -171,6 +171,7 @@ public:
 	int AddPROMConstraints(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	int LoadAdditionalReactions(Data* InData,OptimizationParameter* InParameters);
 	int BuildCoreProblem(Data* InData,OptimizationParameter*& InParameters);
+	int AddMassBalanceConstraint(const char* ID, Data* InData);
 	int AddUptakeLimitConstraints();
 	int FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationParameter* InParameters);
 	int QuantitativeModelOptimization(Data* InData, OptimizationParameter* InParameters);
