@@ -4287,19 +4287,12 @@ int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
       if (currVar == NULL) {
 	currVar = reaction->GetMFAVar(FORWARD_FLUX);
       }
-      for (int j=0; j < reaction->FNumReactants(REACTANT); j++) {
+      for (int j=0; j < reaction->FNumReactants(); j++) {
 	Species* reactant = reaction->GetReactant(j);
 	int atomCount = reactant->CountAtomType(ID);
 	double flux = atomCount * reaction->GetReactantCoef(j);
 	cout << "(3) pushing " << flux << " for " << reactant->GetData("DATABASE",STRING) << endl;
 	biomass += flux;
-      }
-      for (int j = reaction->FNumReactants(REACTANT); j < reaction->FNumReactants(); j++) {
-	Species* product = reaction->GetReactant(j);
-	int atomCount = product->CountAtomType(ID);
-	double flux = atomCount * reaction->GetReactantCoef(j);
-	cout << "(4) pushing " << flux << " for " << product->GetData("DATABASE",STRING) << endl;
-	biomass -= flux;
       }
       newConstraint->Variables.push_back(currVar);
       newConstraint->Coefficient.push_back(biomass);
@@ -4310,6 +4303,43 @@ int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
 
   this->AddConstraint(newConstraint);
   this->AddConstraint(newConstraintReciprocal);
+
+  // shut down any non-zero mass reaction that has either no reactants or no products
+  for (int i=0; i < InData->FNumReactions(); i++) {
+    Reaction* reaction = InData->GetReaction(i);
+    if (reaction->FNumReactants(REACTANT)==0 || reaction->FNumReactants(REACTANT)==reaction->FNumReactants()) {
+      bool massless = true;
+      for (int j=0; j < reaction->FNumReactants(); j++) {
+	Species* reactant = reaction->GetReactant(j);
+	if (reactant->CountAtomType(ID) > 0) {
+	  massless = false;
+	  break;
+	}
+      }
+      if (! massless) {
+	cout << "Shutting down mass-imbalanced reaction: " << reaction->GetData("DATABASE",STRING) << endl;
+	if (reaction->GetMFAVar(FLUX) != NULL) {
+	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	  shutdown->Variables.push_back(reaction->GetMFAVar(FLUX));
+	  shutdown->Coefficient.push_back(1);
+	  this->AddConstraint(shutdown);
+	}
+	if (reaction->GetMFAVar(FORWARD_FLUX) != NULL) {
+	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	  shutdown->Variables.push_back(reaction->GetMFAVar(FORWARD_FLUX));
+	  shutdown->Coefficient.push_back(1);
+	  this->AddConstraint(shutdown);
+	}
+	if (reaction->GetMFAVar(REVERSE_FLUX) != NULL) {
+	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	  shutdown->Variables.push_back(reaction->GetMFAVar(REVERSE_FLUX));
+	  shutdown->Coefficient.push_back(1);
+	  this->AddConstraint(shutdown);
+	}
+      }
+    }
+  }  
+
   return SUCCESS;
 }
 
