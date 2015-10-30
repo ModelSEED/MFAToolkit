@@ -4251,6 +4251,7 @@ int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParamete
 	AddUptakeLimitConstraints();
 	ConvertStringToObjective(GetParameter("objective"), InData);
 	AddMassBalanceConstraint("C", InData);
+	AddDeltaGofFormationConstraint(InData);
 }
 
 int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
@@ -4304,41 +4305,91 @@ int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
   this->AddConstraint(newConstraint);
   this->AddConstraint(newConstraintReciprocal);
 
-  // shut down any non-zero mass reaction that has either no reactants or no products
+  // shut down any mass imbalanced reaction
   for (int i=0; i < InData->FNumReactions(); i++) {
     Reaction* reaction = InData->GetReaction(i);
-    if (reaction->FNumReactants(REACTANT)==0 || reaction->FNumReactants(REACTANT)==reaction->FNumReactants()) {
-      bool massless = true;
-      for (int j=0; j < reaction->FNumReactants(); j++) {
-	Species* reactant = reaction->GetReactant(j);
-	if (reactant->CountAtomType(ID) > 0) {
-	  massless = false;
-	  break;
-	}
+    if (reaction->GetData("DATABASE",STRING).length() > 3 && reaction->GetData("DATABASE",STRING).substr(0,3).compare("bio") == 0) {
+      continue; // skip biomass reaction which is by definition balanced since cpd11416 has no formula
+    }
+    int numID = 0;
+    for (int j=0; j < reaction->FNumReactants(); j++) {
+      Species* reactant = reaction->GetReactant(j);
+      numID += reactant->CountAtomType(ID)*reaction->GetReactantCoef(j);
+    }
+    if (numID != 0) {
+      cout << "Shutting down mass-imbalanced reaction: " << reaction->GetData("DATABASE",STRING) << endl;
+      if (reaction->GetMFAVar(FLUX) != NULL) {
+	LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	shutdown->Variables.push_back(reaction->GetMFAVar(FLUX));
+	shutdown->Coefficient.push_back(1);
+	this->AddConstraint(shutdown);
       }
-      if (! massless) {
-	cout << "Shutting down mass-imbalanced reaction: " << reaction->GetData("DATABASE",STRING) << endl;
-	if (reaction->GetMFAVar(FLUX) != NULL) {
-	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
-	  shutdown->Variables.push_back(reaction->GetMFAVar(FLUX));
-	  shutdown->Coefficient.push_back(1);
-	  this->AddConstraint(shutdown);
-	}
-	if (reaction->GetMFAVar(FORWARD_FLUX) != NULL) {
-	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
-	  shutdown->Variables.push_back(reaction->GetMFAVar(FORWARD_FLUX));
-	  shutdown->Coefficient.push_back(1);
-	  this->AddConstraint(shutdown);
-	}
-	if (reaction->GetMFAVar(REVERSE_FLUX) != NULL) {
-	  LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
-	  shutdown->Variables.push_back(reaction->GetMFAVar(REVERSE_FLUX));
-	  shutdown->Coefficient.push_back(1);
-	  this->AddConstraint(shutdown);
-	}
+      if (reaction->GetMFAVar(FORWARD_FLUX) != NULL) {
+	LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	shutdown->Variables.push_back(reaction->GetMFAVar(FORWARD_FLUX));
+	shutdown->Coefficient.push_back(1);
+	this->AddConstraint(shutdown);
+      }
+      if (reaction->GetMFAVar(REVERSE_FLUX) != NULL) {
+	LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
+	shutdown->Variables.push_back(reaction->GetMFAVar(REVERSE_FLUX));
+	shutdown->Coefficient.push_back(1);
+	this->AddConstraint(shutdown);
       }
     }
   }  
+
+  return SUCCESS;
+}
+
+// formation energy of products leaving the system minus reactants entering the system should be less than zero
+int MFAProblem::AddDeltaGofFormationConstraint(Data* InData) {
+  LinEquation* newConstraint = InitializeLinEquation("Mass balance constraint",0,LESS);
+  // start with drain variables; 
+  for (int j=0; j < this->FNumVariables();j++) {
+    MFAVariable* currVar = this->GetVariable(j);
+    if (currVar->AssociatedSpecies != NULL && currVar->AssociatedSpecies->GetData("DATABASE",STRING).compare("cpd11416_c0") == 0) {
+      continue;
+    }
+    if ((currVar->Type == FORWARD_DRAIN_FLUX || currVar->Type == DRAIN_FLUX) && currVar->AssociatedSpecies != NULL) {
+      double deltaG = currVar->AssociatedSpecies->FEstDeltaG();
+      cout << "(1) pushing deltaG " << deltaG << " for " << currVar->AssociatedSpecies->GetData("DATABASE",STRING) << endl;
+      newConstraint->Variables.push_back(currVar);
+      newConstraint->Coefficient.push_back(-deltaG); // negate, because positive DRAIN_FLUX means reactant is entering the system
+    }
+    if ((currVar->Type == REVERSE_DRAIN_FLUX) && currVar->AssociatedSpecies != NULL) {
+      double deltaG = currVar->AssociatedSpecies->FEstDeltaG();
+      cout << "(2) pushing deltaG " << deltaG << " for " << currVar->AssociatedSpecies->GetData("DATABASE",STRING) << endl;
+      newConstraint->Variables.push_back(currVar);
+      newConstraint->Coefficient.push_back(deltaG);
+    }
+  }
+
+  // include all reactants and products of the biomass reaction
+  for (int i=0; i < InData->FNumReactions(); i++) {
+    Reaction* reaction = InData->GetReaction(i);
+    double biomass = 0;
+    if (reaction->GetData("DATABASE",STRING).length() > 3 && reaction->GetData("DATABASE",STRING).substr(0,3).compare("bio") == 0) {
+      MFAVariable* currVar = reaction->GetMFAVar(FLUX);
+      if (currVar == NULL) {
+	currVar = reaction->GetMFAVar(FORWARD_FLUX);
+      }
+      for (int j=0; j < reaction->FNumReactants(); j++) {
+	Species* reactant = reaction->GetReactant(j);
+	if (reactant->GetData("DATABASE",STRING).compare("cpd11416_c0") == 0) {
+	  continue;
+	}
+	double deltaG = reactant->FEstDeltaG();
+	double flux = deltaG * reaction->GetReactantCoef(j);
+	cout << "(3) pushing deltaG " << deltaG << " for biomass: " << reactant->GetData("DATABASE",STRING) << endl;
+	biomass += flux;
+      }
+      newConstraint->Variables.push_back(currVar); 
+      newConstraint->Coefficient.push_back(-biomass); // negate, because reactant coefficients are negative
+    }
+  }
+
+  this->AddConstraint(newConstraint);
 
   return SUCCESS;
 }
