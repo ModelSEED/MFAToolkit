@@ -4250,11 +4250,18 @@ int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParamete
 	}
 	AddUptakeLimitConstraints();
 	ConvertStringToObjective(GetParameter("objective"), InData);
-	AddMassBalanceConstraint("C", InData);
-	AddDeltaGofFormationConstraint(InData);
+	//Now I add mass balance constraints for particular atoms
+	if (GetParameter("Mass balance atoms").length() > 0 && GetParameter("Mass balance atoms").compare("none") != 0) {
+	  vector<string>* strings = StringToStrings(GetParameter("Mass balance atoms"),";");
+	  for (int i=0; i < int(strings->size()); i++) {
+	    	    AddMassBalanceAtomConstraint((*strings)[i].data(), InData);
+	  }
+	}
+	//	AddDeltaGofFormationConstraint(InData);
 }
 
-int MFAProblem::AddMassBalanceConstraint(const char* ID, Data* InData) {
+int MFAProblem::AddMassBalanceAtomConstraint(const char* ID, Data* InData) {
+  cout << "In AddMassBalanceAtomConstraint with " << ID << endl;
   // two inequalities to constrain absolute value
   LinEquation* newConstraint = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
   LinEquation* newConstraintReciprocal = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
