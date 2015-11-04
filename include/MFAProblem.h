@@ -188,6 +188,7 @@ public:
 	void PrintSolutions(int StartIndex, int EndIndex,bool tightbounds = false);
 	void PrintVariableKey();
 	void WriteLPFile();
+	void WriteMFALog();
 };
 
 struct RegLogicNode {

@@ -21,8 +21,10 @@
 #include "MFAToolkit.h"
 
 int lpcount = 0;
+vector<string>* MFALog;
 
 MFAProblem::MFAProblem() {
+  MFALog = new vector<string>;
 	SetParameter("MFA output path",(FOutputFilepath()+GetParameter("MFA output")).data());
 	MinFluxConstraint = NULL;
 	ObjectiveConstraint = NULL;
@@ -48,6 +50,7 @@ MFAProblem::MFAProblem() {
 }
 
 MFAProblem::~MFAProblem() {
+  delete MFALog;
 	for (int i=0; i < FNumVariables(); i++) {
 		delete Variables[i];
 	}
@@ -4324,7 +4327,10 @@ int MFAProblem::AddMassBalanceAtomConstraint(const char* ID, Data* InData) {
       numID += reactant->CountAtomType(ID)*reaction->GetReactantCoef(j);
     }
     if (numID != 0) {
-      cout << "Shutting down mass-imbalanced reaction: " << reaction->GetData("DATABASE",STRING) << endl;
+      string logit = "Shutting down mass-imbalanced reaction: ";
+      logit.append(reaction->GetData("DATABASE",STRING));
+      MFALog->push_back(logit);
+
       if (reaction->GetMFAVar(FLUX) != NULL) {
 	LinEquation* shutdown = InitializeLinEquation("Shut down flux",0,EQUAL);
 	shutdown->Variables.push_back(reaction->GetMFAVar(FLUX));
@@ -10890,4 +10896,13 @@ void MFAProblem::WriteLPFile() {
 	  GlobalWriteLPFile(Solver,lpcount);
 	  lpcount++;
 	}
+}
+
+void MFAProblem::WriteMFALog() {
+  ofstream log_output;
+  if (OpenOutput(log_output,FOutputFilepath()+"MFALog.txt")) {
+    for (int i = 0; i < MFALog->size(); i++) {
+      log_output << (*MFALog)[i].data() << endl;
+    }
+  }
 }
