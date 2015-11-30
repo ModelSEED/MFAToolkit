@@ -4264,7 +4264,6 @@ int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParamete
 }
 
 int MFAProblem::AddMassBalanceAtomConstraint(const char* ID, Data* InData) {
-  cout << "In AddMassBalanceAtomConstraint with " << ID << endl;
   // two inequalities to constrain absolute value
   LinEquation* newConstraint = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
   LinEquation* newConstraintReciprocal = InitializeLinEquation("Mass balance constraint",MFA_ZERO_TOLERANCE,LESS);
@@ -4329,6 +4328,9 @@ int MFAProblem::AddMassBalanceAtomConstraint(const char* ID, Data* InData) {
     if (numID != 0) {
       string logit = "Shutting down mass-imbalanced reaction: ";
       logit.append(reaction->GetData("DATABASE",STRING));
+      logit.append(" [");
+      logit.append(ID);
+      logit.append("]");
       MFALog->push_back(logit);
 
       if (reaction->GetMFAVar(FLUX) != NULL) {
