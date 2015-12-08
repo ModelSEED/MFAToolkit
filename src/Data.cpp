@@ -1258,6 +1258,7 @@ void Data::PerformMFA() {
 	if (GetParameter("new fba pipeline").compare("1") == 0) {
 		NewProblem->FluxBalanceAnalysisMasterPipeline(this,NewParameters);
 	}
+	NewProblem->WriteMFALog();
 	ClearParameters(NewParameters);
 	delete NewProblem;
 }
