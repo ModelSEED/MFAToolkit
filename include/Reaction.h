@@ -84,9 +84,9 @@ private:
 	double EstDeltaGUncertainty;
 	
 	list<Pathway*>* PathwayList;
-	map<int , MFAVariable* , std::less<int> > MFAVariables;
 	vector<MFAVariable*> ComplexMFAVariables;
 public:
+	map<int , MFAVariable* , std::less<int> > MFAVariables;
 	Reaction(vector<string>* InHeaders, string Fileline, Data* InData);
 	Reaction(string Filename, Data* InData);
 	Reaction(string id,string equation,string name,Data* InData);

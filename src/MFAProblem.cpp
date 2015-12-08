@@ -7788,7 +7788,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 					if (currvar != NULL) {
 						currvar->UpperBound = 0;
 						LoadVariable(currvar->Index);
-						SolveGapfillingProblem(1,gfstart,inactstart,threshold,CurrentSolution,InParameters->GapfillingTargetReactions[i]);
+						SolveGapfillingProblem(1,gfstart,inactstart,threshold,CurrentSolution,InParameters->GapfillingTargetReactions[i],InParameters);
 						currvar->UpperBound = 1;
 						LoadVariable(currvar->Index);
 					}
@@ -7796,7 +7796,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 			}
 		} else {
 			while (stay_in_loop) {
-				stay_in_loop = SolveGapfillingProblem(currentround,gfstart,inactstart,threshold,CurrentSolution,"objective");
+				stay_in_loop = SolveGapfillingProblem(currentround,gfstart,inactstart,threshold,CurrentSolution,"objective",InParameters);
 				if (InParameters->alpha > 0) {
 					//If this is a straight up gapfilling with no activation, then we only solve once
 					stay_in_loop = false;
@@ -7912,7 +7912,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	return SUCCESS;
 }
 
-bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label) {
+bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactstart,double threshold,OptSolutionData*& CurrentSolution,string label,OptimizationParameter* InParameters) {
 	this->ResetSolver();
 	this->LoadSolver(false);
 	CurrentSolution = RunSolver(true,false,true);
