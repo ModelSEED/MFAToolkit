@@ -3717,7 +3717,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 			this->AddObjective(originalObjective);
 			LoadObjective();
 			if (GapfillPhenosim) {
-				bool gapfilled = SolveGapfillingProblem(1,atoi(GetParameter("gfstart").data()),atoi(GetParameter("inactstart").data()),atoi(GetParameter("threshold").data()),NewSolution,label);
+				bool gapfilled = SolveGapfillingProblem(1,atoi(GetParameter("gfstart").data()),atoi(GetParameter("inactstart").data()),atoi(GetParameter("threshold").data()),NewSolution,label,InParameters);
 				if (gapfilled) {
 					WTgrowth = 0;
 					growth = atof(GetParameter("original objective").data());
@@ -3730,7 +3730,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 				}
 				noGrowth.assign(GetParameter("current gapfilled reactions"));
 			} else {
-				NewSolution = RunSolver(false,true,true);
+				NewSolution = RunSolver(false,false,false);
 				if (NewSolution != NULL && NewSolution->Status == SUCCESS) {
 					WTgrowth = NewSolution->Objective;
 					if (WTgrowth < 1e-7) {
@@ -3847,7 +3847,7 @@ int MFAProblem::RunDeletionExperiments(Data* InData,OptimizationParameter* InPar
 								this->LoadObjective();
 							}
 						} else {
-							NewSolution = RunSolver(false,true,false);
+							NewSolution = RunSolver(false,false,false);
 							if (NewSolution != NULL && NewSolution->Status == SUCCESS) {
 								if (NewSolution->Objective/WTgrowth < 0.9) {
 									cout << "Reduced growth" << endl;
