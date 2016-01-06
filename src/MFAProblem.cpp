@@ -7912,7 +7912,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 		}
 	}
 	for (int i=startsize; i < int(ObjFunct->Variables.size()); i++) {
-	  ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*omegap/penaltysum;
+		//ObjFunct->Coefficient[i] = ObjFunct->Coefficient[i]*omegap/penaltysum;
 	}
 	double threshold = 0.5;
 	if (!InParameters->ReactionsUse) {
