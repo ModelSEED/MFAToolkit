@@ -8194,19 +8194,23 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,int gfstart,int inactst
 	LoadObjective();
 	ofstream output;
 	SetParameter("original objective",dtoa(objective));
+
+	if (OpenOutput(output,(FOutputFilepath()+"GapfillingOutput.txt").data(),true)) {
+	  cout << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
+	  output << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
+	  output.close();
+	}
+
 	if (stay_in_loop) {
 		SetParameter("current gapfilled reactions",rxns[0].data());
-		SetParameter("current activated reactions",rxns[1].data());
-		SetParameter("current rejected reactions",rxns[2].data());
-		SetParameter("current cut candidate reactions",rxns[3].data());
-		if (OpenOutput(output,(FOutputFilepath()+"GapfillingOutput.txt").data(),true)) {
-			cout << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
-			output << label << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
-			output.close();
-		}
 	} else {
 		SetParameter("current gapfilled reactions","none");
 	}
+
+	SetParameter("current activated reactions",rxns[1].data());
+	SetParameter("current rejected reactions",rxns[2].data());
+	SetParameter("current cut candidate reactions",rxns[3].data());
+
 	return stay_in_loop;
 }
 
