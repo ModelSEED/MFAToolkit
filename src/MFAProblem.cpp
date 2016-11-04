@@ -4753,14 +4753,17 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	//If flux variability analysis is selected, we run it now
 	if (InParameters->FluxVariabilityAnalysis) {
 		//We will never really want to run FVA with integer vairables - it will just be too slow
+		CurrentObjective = ObjFunct;
 		this->RelaxIntegerVariables = true;
 		ObjectiveConstraint->RightHandSide = 0.1*CurrentOptimum;
 		if (this->Solver != CPLEX) {
 			this->Solver = GLPK;
 		}
 		this->LoadSolver();
+		ObjFunct = NULL;
 		this->FindTightBounds(InData,InParameters,false,true);
 		this->RelaxIntegerVariables = false;
+		ObjFunct = CurrentObjective;
 		this->LoadSolver();
 	}
 
