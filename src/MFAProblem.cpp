@@ -4209,7 +4209,7 @@ int MFAProblem::LoadAdditionalReactions(Data* InData,OptimizationParameter* InPa
 }
 
 int MFAProblem::BuildCoreProblem(Data* InData,OptimizationParameter*& InParameters) {
-	this->LoadBiomassDrainReactions(InData,InParameters);
+	//this->LoadBiomassDrainReactions(InData,InParameters);
 	this->LoadAdditionalReactions(InData,InParameters);
 	if (InParameters == NULL) {
 		InParameters = ReadParameters();
@@ -7008,7 +7008,7 @@ int MFAProblem::CompleteGapFilling(Data* InData, OptimizationParameter* InParame
 	}
 	ClearSolutions();
 	//First we load the complete reaction list from file
-	this->LoadBiomassDrainReactions(InData,InParameters);
+	//this->LoadBiomassDrainReactions(InData,InParameters);
 	if (GetParameter("Add DB reactions for gapfilling").compare("1") == 0) {
 		if (this->LoadGapFillingReactions(InData,InParameters) != SUCCESS) {
 			return FAIL;
@@ -8532,9 +8532,10 @@ bool MFAProblem::SolveGapfillingProblem(int currentround,OptSolutionData*& Curre
 		}
 		this->LoadState(state,true,false,false,false,false);
 		InternalSolution->Objective = objective;
+		int rounds = 0;
 		if (fileopen) {
-			cout << label << "|" << m << "|" << round << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
-			output << label << "|" << m << "|" << round << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
+			cout << label << "|" << m << "|" << rounds << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
+			output << label << "|" << m << "|" << rounds << "\t" << objective << "\t" << gfobjective << "\t" << scores[0] << "/" << counts[0] << "\t" << scores[1] << "/" << counts[1] << "\t" << scores[2] << "/" << counts[2] << "\t" << scores[3] << "/" << counts[3] << "\t" << rxns[0] << "\t" << rxns[1] << "\t" << rxns[2] << "\t" << rxns[3] << "\n";
 		}
 		if (m == 0) {
 			CurrentSolution = InternalSolution;
