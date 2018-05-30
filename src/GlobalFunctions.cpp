@@ -1264,7 +1264,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->AbundanceConstraint = (GetParameter("add abundance constraint").compare("1") == 0);
 	NewParameters->ReactionKOSensitivityAnalysis = (GetParameter("calculate reaction knockout sensitivity").compare("1") == 0);
 	NewParameters->MaximizeActiveReactions = (GetParameter("maximize active reactions").compare("1") == 0);
-
+	NewParameters->MinDevCurrSol = (GetParameter("minimize flux deviation").compare("1") == 0);
 
 	//Variable use parameters
 	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);
@@ -1644,7 +1644,7 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 		// Use the value specified by user.
 		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
-	if (InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
+	if (InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
 		InParameters->DecomposeReversible = true;
 	}
 }

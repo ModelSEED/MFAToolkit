@@ -329,6 +329,8 @@ struct OptimizationParameter {
 	bool AlternativeSolutionAlgorithm;
 	bool DetermineCoEssRxns;
 	bool AbundanceConstraint;
+	bool DynamicFBA;
+	bool MinDevCurrSol;
 	double DeadEndCoefficient;
 
 	bool AddLumpedReactions;
@@ -346,6 +348,10 @@ struct OptimizationParameter {
 	//Indicates that a gene minimization study should be performed
 	bool GeneOptimization;
 
+	double TimeStep;
+	double StopTime;
+	double InitialBiomass;
+	double Volume;
 	double MinimumTargetFlux;
 	double DeltaGSlack;
 	double Temperature;
