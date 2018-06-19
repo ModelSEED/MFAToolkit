@@ -1422,6 +1422,27 @@ int Species::Interpreter(string DataName, string& DataItem, bool Input) {
 				DataItem.assign(itoa(FCharge()));
 			}
 			break;
+		} case CPD_MINFLUX: {
+			if (Input) {
+				minflux = atof(DataItem.data());
+			} else {
+				DataItem.assign(dtoa(minflux));
+			}
+			break;
+		} case CPD_MAXFLUX: {
+			if (Input) {
+				maxflux = atof(DataItem.data());
+			} else {
+				DataItem.assign(dtoa(maxflux));
+			}
+			break;
+		} case CPD_CONCENTRATION: {
+			if (Input) {
+				concentration = atof(DataItem.data());
+			} else {
+				DataItem.assign(dtoa(concentration));
+			}
+			break;
 		} case CPD_SMALLMOLEC: {
 			if (Input) {
 				if (DataItem.compare("1") == 0 || DataItem.compare("yes") == 0) {

@@ -52,6 +52,9 @@ struct OptSolutionData;
 #define CPD_ALLDBLINKS 17
 #define CPD_LOAD 18
 #define CPD_PKB 19
+#define CPD_CONCENTRATION 20
+#define CPD_MAXFLUX 21
+#define CPD_MINFLUX 22
 #define CPD_QUERY 100
 
 class Species : public Identity {
@@ -97,6 +100,9 @@ private:
 	map<int , SpeciesCompartment* , std::less<int> > Compartments;  
 public:
 	int PathwayMark;
+	double concentration;
+	double minflux;
+	double maxflux;
 	
 	Species(vector<string>* InHeaders, string Fileline, Data* InData, bool InCue = false);
 	Species(string InFilename, Data* InData, bool InCue = false);

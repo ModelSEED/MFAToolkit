@@ -231,6 +231,9 @@ void InitializeInternalReferences() {
 	InternalReferenceConversion["RXN_DIRECTION"] = RXN_DIRECTION;
 	InternalReferenceConversion["RXN_COMPARTMENT"] = RXN_COMPARTMENT;
 	InternalReferenceConversion["RXN_COMPLEXES"] = RXN_COMPLEXES;
+	InternalReferenceConversion["RXN_KPRIME"] = RXN_KPRIME;
+	InternalReferenceConversion["RXN_CONCENTRATION"] = RXN_CONCENTRATION;
+	InternalReferenceConversion["RXN_KMCPD"] = RXN_KMCPD;
 
 	InternalReferenceConversion["GENE_DBLINK"] = GENE_DBLINK;
 	InternalReferenceConversion["GENE_COORD"] = GENE_COORD;
@@ -241,6 +244,10 @@ void InitializeInternalReferences() {
 	InternalReferenceConversion["GENE_STRING"] = GENE_STRING;
 	InternalReferenceConversion["GENE_QUERY"] = GENE_QUERY;
 	InternalReferenceConversion["GENE_LOAD"] = GENE_LOAD;
+	InternalReferenceConversion["GENE_CONCENTRATION"] = GENE_CONCENTRATION;
+	InternalReferenceConversion["GENE_TURNOVER"] = GENE_TURNOVER;
+	InternalReferenceConversion["GENE_KPRIME"] = GENE_KPRIME;
+	InternalReferenceConversion["GENE_KMCPD"] = GENE_KMCPD;
 
 	InternalReferenceConversion["CPD_DBLINK"] = CPD_DBLINK;
 	InternalReferenceConversion["CPD_FORMULA"] = CPD_FORMULA;
@@ -262,6 +269,9 @@ void InitializeInternalReferences() {
 	InternalReferenceConversion["CPD_ALLDBLINKS"] = CPD_ALLDBLINKS;
 	InternalReferenceConversion["CPD_QUERY"] = CPD_QUERY;
 	InternalReferenceConversion["CPD_LOAD"] = CPD_LOAD;
+	InternalReferenceConversion["CPD_MINFLUX"] = CPD_MINFLUX;
+	InternalReferenceConversion["CPD_MAXFLUX"] = CPD_MAXFLUX;
+	InternalReferenceConversion["CPD_CONCENTRATION"] = CPD_CONCENTRATION;
 }
 
 void ClearParameterDependance(string InParameterName) {
@@ -1265,6 +1275,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->ReactionKOSensitivityAnalysis = (GetParameter("calculate reaction knockout sensitivity").compare("1") == 0);
 	NewParameters->MaximizeActiveReactions = (GetParameter("maximize active reactions").compare("1") == 0);
 	NewParameters->MinDevCurrSol = (GetParameter("minimize flux deviation").compare("1") == 0);
+	NewParameters->DynamicFBA = (GetParameter("run dynamic FBA").compare("1") == 0);
 
 	//Variable use parameters
 	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);
@@ -1290,6 +1301,12 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->Temperature = atof(GetParameter("Temperature").data());
 
 	//FBA parameters
+	NewParameters->ProteinLimit = atof(GetParameter("Protein limit").data());
+	NewParameters->ProteinProdLimit = atof(GetParameter("Protein prod limit").data());
+	NewParameters->TimeStep = atof(GetParameter("Time step").data());
+	NewParameters->StopTime = atof(GetParameter("Stop time").data());
+	NewParameters->InitialBiomass = atof(GetParameter("Initial biomass").data());
+	NewParameters->Volume = atof(GetParameter("Volume").data());
 	NewParameters->MaxFlux = atof(GetParameter("Max flux").data());
 	if (GetParameter("Max deltaG error").compare("DEFAULT") == 0) {
 		NewParameters->MaxError = FLAG;
@@ -2207,9 +2224,9 @@ string ReverseMapString(string InMap) {
 	return CreateMapString(NewMapData,true);
 }
 
-string GetMFAVariableName(MFAVariable* InVariable) {
+string GetMFAVariableName(MFAVariable* InVariable,bool fullname) {
 	string TypeName;
-	if (GetParameter("use simple variable and constraint names").compare("1") == 0) {
+	if (GetParameter("use simple variable and constraint names").compare("1") == 0 && fullname == false) {
 		TypeName.assign("x");
 		TypeName.append(itoa(InVariable->Index+1));
 		return TypeName;

@@ -146,7 +146,7 @@ MapData* ParseMapString(string InMap);
 
 string ReverseMapString(string InMap);
 
-string GetMFAVariableName(MFAVariable* InVariable);
+string GetMFAVariableName(MFAVariable* InVariable,bool fullname = false);
 
 MFAVariable* GetVariableByName(string name);
 
@@ -348,6 +348,8 @@ struct OptimizationParameter {
 	//Indicates that a gene minimization study should be performed
 	bool GeneOptimization;
 
+	double ProteinLimit;
+	double ProteinProdLimit;
 	double TimeStep;
 	double StopTime;
 	double InitialBiomass;
