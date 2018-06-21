@@ -1781,14 +1781,12 @@ string Reaction::FComplexes() {
 //This function uses the data item headings listed in the input files to determine where the data in those files should be added 
 int Reaction::Interpreter(string DataName, string& DataItem, bool Input) {
 	int DataID = TranslateFileHeader(DataName,REACTION);
-	
 	if (DataID == -1) {
 		AddData(DataName.data(),DataItem.data(),STRING);
 		//FErrorFile() << "UNRECOGNIZED REFERENCE: " << GetData("FILENAME",STRING) << " data reference: " << DataName << " not recognized." << endl;
 		//FlushErrorFile();
 		return FAIL;
 	}
-	
 	switch (DataID) {
 		case RXN_EQUATION: {
 			if (Input) {

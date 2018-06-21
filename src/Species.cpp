@@ -70,7 +70,9 @@ void Species::SetDefaults() {
 	NumNoIDGroups = 0;
 	Cofactor = false;
 	Coa = false;
-	
+	concentration = 0;
+	minflux = -100;
+	maxflux = 100;
 	Charge = 0;
 	NumHeteroRings = 0;
 	ThreeMemberRings = 0;

@@ -5038,10 +5038,6 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 		this->AddConstraint(MaxProteinConstraint);
 	}
 	//Adding initial concentration for all drain fluxes
-	vector<vector<int> > DynamicIndecies;
-	vector<Gene*> DynamicGenes;
-	vector<Reaction*> DynamicReactionProteins;
-	DynamicIndecies.resize(Bounds->VarName.size());
 	MFAVariable* biomassvar = NULL;
 	for (int i=0; i < this->Variables.size(); i++) {
 		if (Variables[i]->Type == FLUX || Variables[i]->Type == FORWARD_FLUX || Variables[i]->Type == REVERSE_FLUX) {
@@ -5077,20 +5073,6 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 				MaxProteinConstraint->Variables.push_back(Variables[i]);
 				MaxProteinConstraint->Coefficient.push_back(-1);
 			}
-		} else if (Variables[i]->Type == FORWARD_DRAIN_FLUX || Variables[i]->Type == DRAIN_FLUX) {
-			for (int j=0; j < Bounds->VarName.size(); j++) {
-				if (Variables[i]->AssociatedSpecies->GetData("DATABASE",STRING).compare(Bounds->VarName[j]) == 0) {
-					DynamicIndecies[j].push_back(i);
-					break;
-				}
-			}
-		} else if (Variables[i]->Type == REVERSE_DRAIN_FLUX) {
-			for (int j=0; j < Bounds->VarName.size(); j++) {
-				if (Variables[i]->AssociatedSpecies->GetData("DATABASE",STRING).compare(Bounds->VarName[j]) == 0) {
-					DynamicIndecies[j].push_back(i);
-					break;
-				}
-			}
 		}
 	}
 	//Creating special reaction flux constraints
@@ -5104,48 +5086,13 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 	OpenOutput(output,FOutputFilepath()+"DynamicFBAOutput.txt");
 	output << "Time\tBiomass";
 	//Printing compound headers
-	for (int i=0; i < Bounds->VarName.size(); i++) {
-		if (Bounds->VarName[i].length() <= 5 || Bounds->VarName[i].substr(0,5).compare("PROT_") != 0) {
-			output << "\t" << Bounds->VarName[i];
-		}
-	}
-	vector<double> DynamicConcentrations;
-	//Printing protein headers
-	for (int i=0; i < Bounds->VarName.size(); i++) {
-		//Initializing all concentrations from input bounds file
-		if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
-			output << "\t" << Bounds->VarName[i];
-			Gene* geneobj = InData->FindGene("DATABASE",Bounds->VarName[i].substr(5).data());
-			if (geneobj != NULL) {
-				cout << "Add gene prot variable:" << Bounds->VarName[i] << endl;
-				DynamicReactionProteins.push_back(NULL);
-				DynamicGenes.push_back(geneobj);
-				DynamicConcentrations.push_back(geneobj->concentration);
-			} else {
-				Reaction* rxnobj = InData->FindReaction("DATABASE",Bounds->VarName[i].substr(5).data());
-				if (rxnobj != NULL && rxnobj->ProteinDeg != NULL) {
-					cout << "Add rxn prot variable:" << Bounds->VarName[i] << endl;
-					DynamicGenes.push_back(NULL);
-					DynamicReactionProteins.push_back(rxnobj);
-					DynamicConcentrations.push_back(rxnobj->concentration);
-				} else {
-					DynamicGenes.push_back(NULL);
-					DynamicReactionProteins.push_back(NULL);
-					cout << "Failing to add any variable:" << Bounds->VarName[i] << endl;
-				}
-			}
-		} else {
-			DynamicReactionProteins.push_back(NULL);
-			DynamicGenes.push_back(NULL);
-			DynamicConcentrations.push_back(Bounds->VarConc[i]*volume);
-			if (Variables[DynamicIndecies[i][0]]->AssociatedSpecies != NULL) {
-				Variables[DynamicIndecies[i][0]]->AssociatedSpecies->concentration = DynamicConcentrations[i];
-			}
-		}
-	}
-	//Printing exchanged species headers
+	vector<Species*> ExtracellularSpecies;
+	vector<Gene*> ProteinSpecies;
+	vector<Reaction*> ReactionEntities;
 	vector<MFAVariable*> fordrains;
 	vector<MFAVariable*> revdrains;
+	vector<double> DynamicConcentrations;
+	//Printing headers and initializing variables for all exchanged compounds
 	for (int i=0; i < InData->FNumSpecies(); i++) {
 		MFAVariable* forvar = InData->GetSpecies(i)->GetMFAVar(DRAIN_FLUX,GetCompartment("e")->Index);
 		if (forvar == NULL) {
@@ -5156,6 +5103,74 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 			output << "\t" << InData->GetSpecies(i)->GetData("DATABASE",STRING);
 			fordrains.push_back(forvar);
 			revdrains.push_back(revvar);
+			ExtracellularSpecies.push_back(InData->GetSpecies(i));
+			ProteinSpecies.push_back(NULL);
+			ReactionEntities.push_back(NULL);
+			DynamicConcentrations.push_back(InData->GetSpecies(i)->concentration*volume);
+		}
+	}
+	//Printing headers and initializing variables for all protein variables
+	for (int i=0; i < Bounds->VarName.size(); i++) {
+		if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
+			Gene* geneobj = InData->FindGene("DATABASE",Bounds->VarName[i].substr(5).data());
+			if (geneobj != NULL) {
+				output << "\t" << Bounds->VarName[i];
+				for (int j=0; j < this->FNumVariables(); j++) {
+					if (Variables[j]->AssociatedSpecies != NULL && Variables[j]->AssociatedSpecies->GetData("DATABASE",STRING).compare(Bounds->VarName[i]) == 0) {
+						if (Variables[j]->Type == FORWARD_DRAIN_FLUX || Variables[j]->Type == DRAIN_FLUX) {
+							fordrains.push_back(Variables[j]);
+						} else if (Variables[j]->Type == REVERSE_DRAIN_FLUX) {
+							revdrains.push_back(Variables[j]);
+						}
+					}
+				}
+				ExtracellularSpecies.push_back(NULL);
+				ProteinSpecies.push_back(geneobj);
+				ReactionEntities.push_back(NULL);
+				DynamicConcentrations.push_back(geneobj->concentration);
+				if (fordrains.size() < ExtracellularSpecies.size()) {
+					fordrains.push_back(NULL);
+				}
+				if (revdrains.size() < ExtracellularSpecies.size()) {
+					revdrains.push_back(NULL);
+				}
+			}
+		}
+	}
+	//Printing headers and initializing variables for all psuedo protein variables
+	for (int i=0; i < Bounds->VarName.size(); i++) {
+		if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
+			if (InData->FindGene("DATABASE",Bounds->VarName[i].substr(5).data()) == NULL) {
+				Reaction* rxnobj = InData->FindReaction("DATABASE",Bounds->VarName[i].substr(5).data());
+				if (rxnobj != NULL && rxnobj->ProteinDeg != NULL) {
+					output << "\t" << Bounds->VarName[i];
+					for (int j=0; j < this->FNumVariables(); j++) {
+						if (Variables[j]->AssociatedSpecies != NULL && Variables[j]->AssociatedSpecies->GetData("DATABASE",STRING).compare(Bounds->VarName[i]) == 0) {
+							if (Variables[j]->Type == FORWARD_DRAIN_FLUX || Variables[j]->Type == DRAIN_FLUX) {
+								fordrains.push_back(Variables[j]);
+							} else if (Variables[j]->Type == REVERSE_DRAIN_FLUX) {
+								revdrains.push_back(Variables[j]);
+							}
+						}
+					}
+					ExtracellularSpecies.push_back(NULL);
+					ProteinSpecies.push_back(NULL);
+					ReactionEntities.push_back(rxnobj);
+					DynamicConcentrations.push_back(rxnobj->concentration);
+					if (fordrains.size() < ExtracellularSpecies.size()) {
+						fordrains.push_back(NULL);
+					}
+					if (revdrains.size() < ExtracellularSpecies.size()) {
+						revdrains.push_back(NULL);
+					}
+				}
+			}
+		}
+	}
+	//Printing exchanged species headers
+	for (int i=0; i < ExtracellularSpecies.size(); i++) {
+		if (ExtracellularSpecies[i] != NULL) {
+			output << "\tEX_" << ExtracellularSpecies[i]->GetData("DATABASE",STRING);
 		}
 	}
 	//Printing reaction headers
@@ -5184,58 +5199,47 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 		output << currtime << "\t" << biomass;
 		double totalprotein = 0;
 		cout << "Time:" << currtime << endl;
-		//Printing compound concentrations first
-		for (int i=0; i < Bounds->VarName.size(); i++) {
-			if (Bounds->VarName[i].length() <= 5 || Bounds->VarName[i].substr(0,5).compare("PROT_") != 0) {
-				output << "\t" << DynamicConcentrations[i];
-			}
-		}
-		//Now pritning protein concentrations and setting flux on protein degradation reactions based on first order degradation rate laws
-		for (int i=0; i < Bounds->VarName.size(); i++) {
-			if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
-				//Printing current protein concentration
-				output << "\t" << DynamicConcentrations[i];
+		//Printing all (compound, protein, psuedo protein) current concentrations first
+		for (int i=0; i < ExtracellularSpecies.size(); i++) {
+			output << "\t" << DynamicConcentrations[i];
+			if (ProteinSpecies[i] != NULL) {
 				//Adding total current protein for use in max protein constraint
 				totalprotein += DynamicConcentrations[i];
-				//Setting gene concentration - necessary to update reaction flux constraints
-				if (DynamicGenes[i] != NULL) {
-					DynamicGenes[i]->concentration = DynamicConcentrations[i];
-					DynamicGenes[i]->ProteinDeg->UpperBound = DynamicGenes[i]->concentration*DynamicGenes[i]->turnover;
-					DynamicGenes[i]->ProteinDeg->LowerBound = DynamicGenes[i]->concentration*DynamicGenes[i]->turnover;
-					LoadVariable(DynamicGenes[i]->ProteinDeg->Index);
-				} else if (DynamicReactionProteins[i] != NULL) {
-					DynamicReactionProteins[i]->concentration = DynamicConcentrations[i];
-					DynamicReactionProteins[i]->ProteinDeg->UpperBound = DynamicReactionProteins[i]->concentration*DynamicReactionProteins[i]->turnover;
-					DynamicReactionProteins[i]->ProteinDeg->LowerBound = DynamicReactionProteins[i]->concentration*DynamicReactionProteins[i]->turnover;
-					LoadVariable(DynamicReactionProteins[i]->ProteinDeg->Index);
-				}
+				ProteinSpecies[i]->concentration = DynamicConcentrations[i];
+				ProteinSpecies[i]->ProteinDeg->UpperBound = ProteinSpecies[i]->concentration*ProteinSpecies[i]->turnover;
+				ProteinSpecies[i]->ProteinDeg->LowerBound = ProteinSpecies[i]->concentration*ProteinSpecies[i]->turnover;
+				LoadVariable(ProteinSpecies[i]->ProteinDeg->Index);
+			} else if (ReactionEntities[i] != NULL) {
+				//Adding total current protein for use in max protein constraint
+				totalprotein += DynamicConcentrations[i];
+				ReactionEntities[i]->concentration = DynamicConcentrations[i];
+				ReactionEntities[i]->ProteinDeg->UpperBound = ReactionEntities[i]->concentration*ReactionEntities[i]->turnover;
+				ReactionEntities[i]->ProteinDeg->LowerBound = ReactionEntities[i]->concentration*ReactionEntities[i]->turnover;
+				LoadVariable(ReactionEntities[i]->ProteinDeg->Index);
+			} else if (ExtracellularSpecies[i] != NULL) {
+				ExtracellularSpecies[i]->concentration = DynamicConcentrations[i];
 			}
-			if (Variables[DynamicIndecies[i][0]]->AssociatedSpecies != NULL) {
-				Variables[DynamicIndecies[i][0]]->AssociatedSpecies->concentration = DynamicConcentrations[i];
-			}
-
-			//Ensuring that no dyanmic variable can decrease to below zero
-			for (int j=0; j < int(DynamicIndecies[i].size()); j++) {
-				if (Variables[DynamicIndecies[i][j]]->Type == FORWARD_DRAIN_FLUX || Variables[DynamicIndecies[i][j]]->Type == DRAIN_FLUX) {
-					if (Bounds->VarName[i].substr(0,5).length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
-						Variables[DynamicIndecies[i][j]]->UpperBound = DynamicConcentrations[i]/timestep;
-					} else {
-						Variables[DynamicIndecies[i][j]]->UpperBound = DynamicConcentrations[i]/timestep/biomass;
-					}
-					LoadVariable(DynamicIndecies[i][j]);
+			if (fordrains[i] != NULL) {
+				if (ExtracellularSpecies[i] != NULL) {
+					fordrains[i]->UpperBound = DynamicConcentrations[i]/timestep/biomass;;
+				} else {
+					fordrains[i]->UpperBound = DynamicConcentrations[i]/timestep;
 				}
+				LoadVariable(fordrains[i]->Index);
 			}
 		}
 		//Printing current exchanges
 		for (int i=0; i < int(fordrains.size()); i++) {
-			double flux = 0;
-			if (fordrains[i] != NULL) {
-				flux += fordrains[i]->Value;
+			if (ExtracellularSpecies[i] != NULL) {
+				double flux = 0;
+				if (fordrains[i] != NULL) {
+					flux += fordrains[i]->Value;
+				}
+				if (revdrains[i] != NULL) {
+					flux -= revdrains[i]->Value;
+				}
+				output << "\t" << flux;
 			}
-			if (revdrains[i] != NULL) {
-				flux -= revdrains[i]->Value;
-			}
-			output << "\t" << flux;
 		}
 		//Printing current reactions
 		for (int i=0; i < int(forfluxes.size()); i++) {
@@ -5260,32 +5264,35 @@ int MFAProblem::DynamicFBA(Data* InData, OptimizationParameter* InParameters) {
 		}
 		cout << "Running FBA" << endl;
 		//Running the solver
-		this->WriteLPFile();
-		OptSolutionData* CurrentSolution = RunSolver(true,true,true);
+		OptSolutionData* CurrentSolution = RunSolver(false,true,false);
 		cout << "FBA done" << endl;
 		//Updating time
 		currtime += timestep;
-		//Updating biomass
-		biomass += CurrentSolution->SolutionData[biomassvar->Index]*timestep*biomass;
 		//Updating all dynamic variables
-		for (int i=0; i < Bounds->VarName.size(); i++) {
-			for (int j=0; j < DynamicIndecies[i].size(); j++) {
-				if (Variables[DynamicIndecies[i][j]]->Type == FORWARD_DRAIN_FLUX || Variables[DynamicIndecies[i][j]]->Type == DRAIN_FLUX) {
-					if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
-						DynamicConcentrations[i] -= CurrentSolution->SolutionData[DynamicIndecies[i][j]]*timestep;
-					} else {
-						DynamicConcentrations[i] -= CurrentSolution->SolutionData[DynamicIndecies[i][j]]*timestep*biomass;
-					}
-				} else {
-					if (Bounds->VarName[i].length() > 5 && Bounds->VarName[i].substr(0,5).compare("PROT_") == 0) {
-						DynamicConcentrations[i] += CurrentSolution->SolutionData[DynamicIndecies[i][j]]*timestep;
-					} else {
-						DynamicConcentrations[i] += CurrentSolution->SolutionData[DynamicIndecies[i][j]]*timestep*biomass;
-					}
-				}
+		for (int i=0; i < ExtracellularSpecies.size(); i++) {
+			double flux = 0;
+			if (fordrains[i] != NULL) {
+				flux += fordrains[i]->Value;
+			}
+			if (revdrains[i] != NULL) {
+				flux -= revdrains[i]->Value;
+			}
+			if (ProteinSpecies[i] != NULL || ReactionEntities[i] != NULL) {
+				DynamicConcentrations[i] -= flux*timestep;
+			} else {
+				DynamicConcentrations[i] -= flux*timestep*biomass;
+			}
+			//Rounding very small concentrations to zero
+			if (DynamicConcentrations[i] < 0.000000001 && DynamicConcentrations[i] > -0.000000001) {
+				DynamicConcentrations[i] = 0;
+			}
+			//Setting negative concentrations to zero (shouldn't have to do this)
+			if (DynamicConcentrations[i] < 0) {
+				//DynamicConcentrations[i] = 0;
 			}
 		}
-
+		//Updating biomass
+		biomass += CurrentSolution->SolutionData[biomassvar->Index]*timestep*biomass;
 	}
 	//Printing final set of variable values
 	output << currtime << "\t" << biomass;
