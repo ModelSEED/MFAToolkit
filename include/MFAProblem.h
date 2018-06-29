@@ -140,6 +140,8 @@ public:
 	vector<MFAVariable*>* CreateMetaboliteVariables(Data* InData, string InMetaboliteList);
 	int CheckIndividualMetaboliteProduction(Data* InData, OptimizationParameter* InParameters, string InMetaboliteList, bool DoFindTightBounds, bool MinimizeForeignReactions, string Note, bool SubProblem);
 	int AuxotrophyAnalysis(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
+	vector<vector<MFAVariable*>*>* MFAProblem::RecursiveObjectiveReduction(MFAVariable* InVariable,double TargetObjective,LinEquation* MinDeviationObjective,OptSolutionData* PreviousSolution);
+	int ReduceObjective(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	OptSolutionData* ComputeMinimalDeviationFluxSolution(OptSolutionData* CurrentSolution);
 	int RunDeletionExperiments(Data* InData, OptimizationParameter* InParameters,bool GapfillPhenosim = false,OptSolutionData* CurrentSolution = NULL);
 	int RunMediaExperiments(Data* InData, OptimizationParameter* InParameters, double WildTypeObjective, bool DoOptimizeSingleObjective, bool DoFindTightBounds, bool MinimizeForeignReactions, bool OptimizeMetaboliteProduction);

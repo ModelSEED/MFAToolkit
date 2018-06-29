@@ -3096,7 +3096,7 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 		NewVariable->AssociatedReaction = this;
 		NewVariable->Type = POSITIVE_DELTAG;
 		MFAVariables[POSITIVE_DELTAG] = NewVariable;
-		NewVariable->LowerBound = -InParameters->MaxDeltaG;
+		NewVariable->LowerBound = 0;
 		NewVariable->UpperBound = InParameters->MaxDeltaG;
 
 		NewVariable = InitializeMFAVariable();
@@ -3104,7 +3104,7 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 		NewVariable->AssociatedReaction = this;
 		NewVariable->Type = NEGATIVE_DELTAG;
 		MFAVariables[NEGATIVE_DELTAG] = NewVariable;
-		NewVariable->LowerBound = -InParameters->MaxDeltaG;
+		NewVariable->LowerBound = 0;
 		NewVariable->UpperBound = InParameters->MaxDeltaG;
 
 		NewVariable = InitializeMFAVariable();

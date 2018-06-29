@@ -363,6 +363,7 @@ struct OptimizationParameter {
 	double MaxDrainFlux;
 	double MinDrainFlux;
 	double MaxError;
+	double TargetObjectiveValue;
 	double OptimalObjectiveFraction;
 	int SolutionSizeInterval;
 	int RecursiveMILPSolutionLimit;

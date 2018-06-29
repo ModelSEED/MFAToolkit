@@ -1308,6 +1308,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->InitialBiomass = atof(GetParameter("Initial biomass").data());
 	NewParameters->Volume = atof(GetParameter("Volume").data());
 	NewParameters->MaxFlux = atof(GetParameter("Max flux").data());
+	NewParameters->TargetObjectiveValue = atof(GetParameter("target objective value").data());
 	if (GetParameter("Max deltaG error").compare("DEFAULT") == 0) {
 		NewParameters->MaxError = FLAG;
 	} else {
