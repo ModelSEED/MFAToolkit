@@ -132,18 +132,11 @@ void Reaction::AddReactant(Species* InReactant, double ICoef, int InCompartment,
 	}
 
 	int OriginalCompartment = InCompartment;
-	if (OriginalCompartment >= 1000) {
-		OriginalCompartment = OriginalCompartment - 1000;
-	}
 
 	if (InCompartment == 100) {
 		InReactant->AddCompartment(Compartment);
 	} else {
 		InReactant->AddCompartment(InCompartment);
-	}
-		
-	if ((InReactant->FCofactor() || InCofactor) && InCompartment < 1000) {
-		InCompartment = InCompartment + 1000;
 	}
 
 	if (ICoef == 0) {
@@ -159,8 +152,9 @@ void Reaction::AddReactant(Species* InReactant, double ICoef, int InCompartment,
 			Reactants.erase(Reactants.begin()+i,Reactants.begin()+i+1);
 			ReactCoef.erase(ReactCoef.begin()+i,ReactCoef.begin()+i+1);
 			ReactCompartments.erase(ReactCompartments.begin()+i,ReactCompartments.begin()+i+1);
+			ReactantCofactors.erase(ReactantCofactors.begin()+i,ReactantCofactors.begin()+i+1);
 			if (NewCoef != 0) {
-				AddReactant(InReactant,NewCoef,InCompartment);
+				AddReactant(InReactant,NewCoef,InCompartment,InCofactor);
 			}
 			return;
 		}
@@ -172,12 +166,14 @@ void Reaction::AddReactant(Species* InReactant, double ICoef, int InCompartment,
 				Reactants.insert(Reactants.begin()+i, InReactant);
 				ReactCoef.insert(ReactCoef.begin()+i, ICoef);
 				ReactCompartments.insert(ReactCompartments.begin()+i, InCompartment);
+				ReactantCofactors.insert(ReactantCofactors.begin()+i, InCofactor);
 				return;
 			}
 			else if (ReactCoef[i] > 0) {
 				Reactants.insert(Reactants.begin()+i, InReactant);
 				ReactCoef.insert(ReactCoef.begin()+i, ICoef);
 				ReactCompartments.insert(ReactCompartments.begin()+i, InCompartment);
+				ReactantCofactors.insert(ReactantCofactors.begin()+i, InCofactor);
 				NumReactants++;
 				return;
 			}
@@ -187,6 +183,7 @@ void Reaction::AddReactant(Species* InReactant, double ICoef, int InCompartment,
 				Reactants.insert(Reactants.begin()+i, InReactant);
 				ReactCoef.insert(ReactCoef.begin()+i, ICoef);
 				ReactCompartments.insert(ReactCompartments.begin()+i, InCompartment);
+				ReactantCofactors.insert(ReactantCofactors.begin()+i, InCofactor);
 				return;
 			}
 		}
@@ -197,6 +194,7 @@ void Reaction::AddReactant(Species* InReactant, double ICoef, int InCompartment,
 	Reactants.push_back(InReactant);
 	ReactCoef.push_back(ICoef);
 	ReactCompartments.push_back(InCompartment);
+	ReactantCofactors.push_back(InCofactor);
 };
 
 void Reaction::SetEstDeltaG(double InDG) {
@@ -214,14 +212,8 @@ void Reaction::AddStructuralCue(Species* InCue, double Coeff) {
 };
 
 void Reaction::SetReactantToCofactor(int InIndex, bool Cofactor) {
-	if (Cofactor) {
-		if (ReactCompartments[InIndex] < 1000) {
-			ReactCompartments[InIndex] += 1000;
-		}
-	} else {
-		if (ReactCompartments[InIndex] >= 1000) {
-			ReactCompartments[InIndex] += -1000;
-		}
+	if (InIndex < this->FNumReactants()) {
+		this->ReactantCofactors[InIndex] = Cofactor;
 	}
 };
 
@@ -234,6 +226,7 @@ void Reaction::RemoveCompound(Species* InSpecies, int InCompartment) {
 			Reactants.erase(Reactants.begin()+i,Reactants.begin()+i+1);
 			ReactCoef.erase(ReactCoef.begin()+i,ReactCoef.begin()+i+1);
 			ReactCompartments.erase(ReactCompartments.begin()+i,ReactCompartments.begin()+i+1);
+			ReactantCofactors.erase(ReactantCofactors.begin()+i,ReactantCofactors.begin()+i+1);
 			i--;
 		}
 	}
@@ -690,11 +683,10 @@ Data* Reaction::FMainData() {
 }
 
 bool Reaction::IsReactantCofactor(int InIndex) {
-	if (ReactCompartments[InIndex] >= 1000) {
+	if (Reactants[InIndex]->FCofactor()) {
 		return true;
-	} else {
-		return false;
 	}
+	return ReactantCofactors[InIndex];
 };
 
 int Reaction::FNumReactants(int ProductOrReactant){
@@ -717,9 +709,6 @@ double Reaction::GetReactantCoef(int InIndex) {
 
 int Reaction::GetReactantCompartment(int InIndex) {
 	int ReturnCompartment = ReactCompartments[InIndex];
-	if (ReturnCompartment >= 1000) {
-		ReturnCompartment = ReturnCompartment - 1000; 
-	}
 	if (ReturnCompartment == 100) {
 		ReturnCompartment = Compartment;
 	}
@@ -2062,6 +2051,7 @@ int Reaction::LoadReaction(string InFilename) {
 	Reactants.clear();
 	ReactCoef.clear();
 	ReactCompartments.clear();
+	ReactantCofactors.clear();
 	NumReactants = 0;
 	for (int i=0; i < reactionObj->get_table()->number_of_attributes();i++) {
 		string attribute = reactionObj->get_table()->get_attribute(i);
@@ -2247,20 +2237,24 @@ void Reaction::ReverseReaction() {
 	vector<int> Comp;
 	vector<double> Coef;
 	vector<Species*> Spec;
+	vector<bool> Cof;
 	for (int i=0; i < FNumReactants(REACTANT); i++) {
 		Comp.push_back(GetReactantCompartment(i));
 		Coef.push_back(GetReactantCoef(i));
 		Spec.push_back(GetReactant(i));
+		Cof.push_back(IsReactantCofactor(i));
 		if ((FNumReactants(REACTANT)+i)<FNumReactants()) {
 			Reactants[i] = Reactants[FNumReactants(REACTANT)+i];
 			ReactCoef[i] = -ReactCoef[FNumReactants(REACTANT)+i];
 			ReactCompartments[i] = ReactCompartments[FNumReactants(REACTANT)+i];
+			ReactantCofactors[i] = ReactantCofactors[FNumReactants(REACTANT)+i];
 		}
 	}
 	for(int i = 0; i < int(Spec.size()); i++) {
 		Reactants[i+FNumReactants(PRODUCT)] = Spec[i];
 		ReactCoef[i+FNumReactants(PRODUCT)] = -Coef[i];
 		ReactCompartments[i+FNumReactants(PRODUCT)] = Comp[i];
+		ReactantCofactors[i+FNumReactants(PRODUCT)] = Comp[i];
 	}
 	NumReactants = FNumReactants(PRODUCT);
 }

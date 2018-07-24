@@ -63,6 +63,7 @@ private:
 	vector<Species*> Reactants;
 	vector<double> ReactCoef;
 	vector<int> ReactCompartments;
+	vector<bool> ReactantCofactors;
 
 	int Type; //0 for reversible, 1 for forward, 2 for backward
 	int Compartment;
