@@ -1445,6 +1445,13 @@ int Species::Interpreter(string DataName, string& DataItem, bool Input) {
 				DataItem.assign(dtoa(concentration));
 			}
 			break;
+		} case CPD_FLOW_IN_CONC: {
+			if (Input) {
+				flow_in_concentration = atof(DataItem.data());
+			} else {
+				DataItem.assign(dtoa(flow_in_concentration));
+			}
+			break;
 		} case CPD_SMALLMOLEC: {
 			if (Input) {
 				if (DataItem.compare("1") == 0 || DataItem.compare("yes") == 0) {

@@ -53,6 +53,7 @@ struct OptSolutionData;
 #define CPD_LOAD 18
 #define CPD_PKB 19
 #define CPD_CONCENTRATION 20
+#define CPD_FLOW_IN_CONC 23
 #define CPD_MAXFLUX 21
 #define CPD_MINFLUX 22
 #define CPD_QUERY 100
@@ -101,6 +102,7 @@ private:
 public:
 	int PathwayMark;
 	double concentration;
+	double flow_in_concentration;
 	double minflux;
 	double maxflux;
 	

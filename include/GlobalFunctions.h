@@ -354,6 +354,8 @@ struct OptimizationParameter {
 	double StopTime;
 	double InitialBiomass;
 	double Volume;
+	double FlowIn;
+	double FlowOut;
 	double MinimumTargetFlux;
 	double DeltaGSlack;
 	double Temperature;
