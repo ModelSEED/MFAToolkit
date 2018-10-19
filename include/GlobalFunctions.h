@@ -347,6 +347,8 @@ struct OptimizationParameter {
 	bool DeletionOptimization;
 	//Indicates that a gene minimization study should be performed
 	bool GeneOptimization;
+	bool ReduceObjective;
+	bool ReactionAdditionStudy;
 
 	double ProteinLimit;
 	double ProteinProdLimit;
@@ -365,7 +367,9 @@ struct OptimizationParameter {
 	double MaxDrainFlux;
 	double MinDrainFlux;
 	double MaxError;
-	double TargetObjectiveValue;
+	double MaxObjective;
+	double MinObjective;
+	double ObjectiveLimit;
 	double OptimalObjectiveFraction;
 	int SolutionSizeInterval;
 	int RecursiveMILPSolutionLimit;

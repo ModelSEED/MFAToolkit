@@ -1276,6 +1276,8 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->MaximizeActiveReactions = (GetParameter("maximize active reactions").compare("1") == 0);
 	NewParameters->MinDevCurrSol = (GetParameter("minimize flux deviation").compare("1") == 0);
 	NewParameters->DynamicFBA = (GetParameter("run dynamic FBA").compare("1") == 0);
+	NewParameters->ReduceObjective = (GetParameter("reduce objective").compare("1") == 0);
+	NewParameters->ReactionAdditionStudy = (GetParameter("reaction addition study").compare("1") == 0);
 
 	//Variable use parameters
 	NewParameters->ReactionsUse = (GetParameter("Reactions use variables").compare("1") == 0);
@@ -1308,7 +1310,9 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->InitialBiomass = atof(GetParameter("Initial biomass").data());
 	NewParameters->Volume = atof(GetParameter("Volume").data());
 	NewParameters->MaxFlux = atof(GetParameter("Max flux").data());
-	NewParameters->TargetObjectiveValue = atof(GetParameter("target objective value").data());
+	NewParameters->MaxObjective = atof(GetParameter("max objective").data());
+	NewParameters->MinObjective = atof(GetParameter("min objective").data());
+	NewParameters->ObjectiveLimit = atof(GetParameter("max objective limit").data());
 	if (GetParameter("Max deltaG error").compare("DEFAULT") == 0) {
 		NewParameters->MaxError = FLAG;
 	} else {
@@ -1342,7 +1346,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->PrintSolutions = true;
 	NewParameters->ClearSolutions = true;
 
-	if (GetParameter("Simultaneous gapfill").compare("1") == 0 || NewParameters->TranscriptomeAnalysis || NewParameters->ReactionKOSensitivityAnalysis || NewParameters->MaximizeActiveReactions) {
+	if (GetParameter("Simultaneous gapfill").compare("1") == 0 || NewParameters->TranscriptomeAnalysis || NewParameters->ReactionKOSensitivityAnalysis || NewParameters->MaximizeActiveReactions || NewParameters->ReduceObjective) {
 		if (NewParameters->ReactionsUse) {
 			NewParameters->BinaryReactionSlackVariable = true;
 		} else {
@@ -1603,6 +1607,7 @@ OptimizationParameter* ReadParameters() {
 	if (Filename.compare("none") != 0) {
 		NewParameters->UserBounds = ReadBounds(Filename.data());
 	}
+	cout << "Default exchange: " << GetParameter("default exchange compartment") << endl;
 	NewParameters->DefaultExchangeComp = GetCompartment(GetParameter("default exchange compartment").data())->Index;
 
 	//Some parameter settings require other settings to be a certain way... this function ensures that all parameters are set properly
@@ -1628,7 +1633,7 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 	if (InParameters->OptimalObjectiveFraction >= 1) {
 		InParameters->OptimalObjectiveFraction = 0.99;
 	}
-	if (InParameters->TranscriptomeAnalysis || InParameters->GapFilling) {
+	if (InParameters->TranscriptomeAnalysis) {
 		InParameters->ReactionSlackVariable = 1;
 	}
 	if (InParameters->MinFluxMultiplier < 1) {
@@ -1662,7 +1667,7 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 		// Use the value specified by user.
 		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
-	if (InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
+	if (InParameters->ReactionAdditionStudy || InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
 		InParameters->DecomposeReversible = true;
 	}
 }

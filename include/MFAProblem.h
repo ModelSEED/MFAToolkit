@@ -72,7 +72,7 @@ public:
 	void ClearConstraints(bool DeleteThem = true);
 	void ClearVariables(bool DeleteThem = true);
 	void DetermineProbType();
-	void AddSumObjective(int VarType, bool Quadratic, bool Append, double Coeff, bool ForeignOnly); 
+	LinEquation* AddSumObjective(int VarType, bool Quadratic, bool Append, double Coeff, bool ForeignOnly,LinEquation* InObjective = NULL);
 	void AddMassBalanceConstraints(Data* InData);
 	LinEquation* AddSumConstraint(int VarType, bool Quadratic, double Coeff, double RHS, int EqualityType);
 	LinEquation* AddUseSolutionConst(OptSolutionData* SolutionData, vector<int> VariableTypes, OptimizationParameter* InParameters);
@@ -90,7 +90,7 @@ public:
 	LinEquation* CreateGibbsEnergyConstraint(Reaction* InReaction, OptimizationParameter*& InParameters);
 	LinEquation* CreateReactionErrorConstraint(Reaction* InReaction, OptimizationParameter*& InParameters);
 	void CreateSpeciesGibbsEnergyConstraint(Species* InSpecies, OptimizationParameter*& InParameters);
-	LinEquation* ConvertStringToObjective(string ObjString, Data* InData);
+	LinEquation* ConvertStringToObjective(string ObjString, Data* InData,bool ReplaceObjective = true);
 	void RemoveConstraint(int ConstraintIndex, bool DeleteConstraint = true);
 	void RelaxConstraint(int ConstraintIndex);
 	int SaveState();
@@ -136,14 +136,15 @@ public:
 	int AlternativeSolutionExploration(OptimizationParameter* InParameters,string Filename,OptSolutionData* InitialSolution = NULL,bool clearmarks = true);
 	int RecursiveMILP(Data* InData,OptimizationParameter*& InParameters, vector<int> VariableTypes,bool PrintSolutions);
 	vector<OptSolutionData*> RecursiveMILP(OptimizationParameter* InParameters, string ProblemNote,bool ForeignOnly,vector<int> VariableTypes,double MinSolution,int ClockIndex,LinEquation* OriginalObjective);
-	MFAVariable* CreateOrGetDrainVariable(Species* CurrentSpecies, int compartment,bool reversed = false);
+	MFAVariable* CreateOrGetDrainVariable(Species* CurrentSpecies, int compartment,bool reversed = false,int type = DRAIN_FLUX);
 	vector<MFAVariable*>* CreateMetaboliteVariables(Data* InData, string InMetaboliteList);
+	int ComputeOptimalDeadends(Data* InData);
 	int CheckIndividualMetaboliteProduction(Data* InData, OptimizationParameter* InParameters, string InMetaboliteList, bool DoFindTightBounds, bool MinimizeForeignReactions, string Note, bool SubProblem);
-	int AuxotrophyAnalysis(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
-	vector<vector<MFAVariable*>*>* RecursiveObjectiveReduction(MFAVariable* InVariable,double TargetObjective,LinEquation* MinDeviationObjective,OptSolutionData* PreviousSolution);
+	vector<vector<MFAVariable*>*>* RecursiveObjectiveReduction(MFAVariable* InVariable,double MinObjective,double MaxObjective,LinEquation* MinDeviationObjective,OptSolutionData* PreviousSolution,int depth,vector<bool> blacklist);
 	int AnalyzeMetaboliteInteractions(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution, bool consumption, bool production);
 	int FitFluxVector(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	int MinimizeFluxDeviation(vector<Reaction*> reactions, vector<double> fluxes,OptSolutionData*& CurrentSolution);
+	int ReactionAdditionTesting(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution,LinEquation* NewObjective,vector<MFAVariable*> TestVariables,bool PrintResults);
 	int ReduceObjective(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
 	OptSolutionData* ComputeMinimalDeviationFluxSolution(OptSolutionData* CurrentSolution);
 	int RunDeletionExperiments(Data* InData, OptimizationParameter* InParameters,bool GapfillPhenosim = false,OptSolutionData* CurrentSolution = NULL);

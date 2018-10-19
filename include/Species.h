@@ -97,7 +97,6 @@ private:
 	list<Reaction*> ReactionList;
 
 	vector<SpeciesCompartment*> CompartmentVector;
-	map<int , MFAVariable* , std::less<int> > MFAVariables;
 	map<int , SpeciesCompartment* , std::less<int> > Compartments;  
 public:
 	int PathwayMark;
@@ -105,6 +104,7 @@ public:
 	double flow_in_concentration;
 	double minflux;
 	double maxflux;
+	map<int , MFAVariable* , std::less<int> > MFAVariables;
 	
 	Species(vector<string>* InHeaders, string Fileline, Data* InData, bool InCue = false);
 	Species(string InFilename, Data* InData, bool InCue = false);
