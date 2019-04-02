@@ -332,6 +332,8 @@ struct OptimizationParameter {
 	bool DynamicFBA;
 	bool MinDevCurrSol;
 	bool SteadyStateCommunityModeling;
+	bool SteadyStateProteinFBA;
+	bool CatalogueFluxLoops;
 	double DeadEndCoefficient;
 
 	bool AddLumpedReactions;
