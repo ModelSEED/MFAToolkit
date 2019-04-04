@@ -87,8 +87,7 @@ Reaction::Reaction(string id,string equation,string name,Data* InData) {
 	kprime = 1;
 	turnover = 0.034537;
 	concentration = 1;
-	PrimaryForFluxConstraint = NULL;
-	PrimaryRevFluxConstraint = NULL;
+	PrimaryFluxConstraint = NULL;
 	Interpreter("id",id,true);
 	Interpreter("equation",equation,true);
 	Interpreter("name",name,true);
