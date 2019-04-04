@@ -37,8 +37,7 @@ Reaction::Reaction(vector<string>* InHeaders, string Fileline, Data* InData) {
 	kprime = 1;
 	turnover = 0.034537;
 	concentration = 1;
-	PrimaryForFluxConstraint = NULL;
-	PrimaryRevFluxConstraint = NULL;
+	PrimaryFluxConstraint = NULL;
 	ReadFromFileline(InHeaders,Fileline);
 	AddToReactants();
 	PerformAllCalculations();
@@ -62,8 +61,7 @@ Reaction::Reaction(string Filename, Data* InData) {
 	kprime = 1;
 	turnover = 0.034537;
 	concentration = 1;
-	PrimaryForFluxConstraint = NULL;
-	PrimaryRevFluxConstraint = NULL;
+	PrimaryFluxConstraint = NULL;
 	if (Filename.length() > 0) {
 		LoadReaction(Filename);
 		AddToReactants();
