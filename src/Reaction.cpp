@@ -3077,6 +3077,19 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 		}
 	}
 
+	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || InParameters->ExcludeSimultaneousReversibleFlux) {
+		if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || this->FType() == REVERSIBLE) {
+			NewVariable = InitializeMFAVariable();
+			NewVariable->Name = GetData("DATABASE",STRING);
+			NewVariable->AssociatedReaction = this;
+			NewVariable->Type = FORWARD_REACTION;
+			MFAVariables[FORWARD_REACTION] = NewVariable;
+			NewVariable->LowerBound = 0;
+			NewVariable->UpperBound = 1;
+			NewVariable->Binary = true;
+		}
+	}
+
 	if (InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints) {
 		//Creating the delta G variable
 //		NewVariable = InitializeMFAVariable();
@@ -3094,15 +3107,6 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 //		MFAVariables[NEGATIVE_DELTAG] = NewVariable;
 //		NewVariable->LowerBound = 0;
 //		NewVariable->UpperBound = InParameters->MaxDeltaG;
-
-		NewVariable = InitializeMFAVariable();
-		NewVariable->Name = GetData("DATABASE",STRING);
-		NewVariable->AssociatedReaction = this;
-		NewVariable->Type = FORWARD_REACTION;
-		MFAVariables[FORWARD_REACTION] = NewVariable;
-		NewVariable->LowerBound = 0;
-		NewVariable->UpperBound = 1;
-		NewVariable->Binary = true;
 	}
 
 	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
@@ -3115,16 +3119,6 @@ void Reaction::CreateMFAVariables(OptimizationParameter* InParameters) {
 			NewVariable->LowerBound = 0;
 			NewVariable->UpperBound = 1;
 			NewVariable->Binary = InParameters->BinaryReactionSlackVariable;
-			if (!InParameters->ThermoConstraints && !InParameters->SimpleThermoConstraints && this->FType() == REVERSIBLE) {
-				NewVariable = InitializeMFAVariable();
-				NewVariable->Name = GetData("DATABASE",STRING);
-				NewVariable->AssociatedReaction = this;
-				NewVariable->Type = FORWARD_REACTION;
-				MFAVariables[FORWARD_REACTION] = NewVariable;
-				NewVariable->LowerBound = 0;
-				NewVariable->UpperBound = 1;
-				NewVariable->Binary = true;
-			}
 		}
 	}
 
@@ -3396,6 +3390,27 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 			NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
 			InProblem->AddConstraint(NewConstraint);
 		}
+	} else if (InParameters->ExcludeSimultaneousReversibleFlux && this->FType() == REVERSIBLE) {
+		LinEquation* NewConstraint = InitializeLinEquation("Associating forward flux to FORWARD_REACTION",0,LESS);
+		NewConstraint->AssociatedReaction = this;
+		MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		NewConstraint->Coefficient.push_back(-1000);
+		NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+		InProblem->AddConstraint(NewConstraint);
+		NewConstraint = InitializeLinEquation("Associating reverse flux to FORWARD_REACTION",1000,LESS);
+		NewConstraint->AssociatedReaction = this;
+		fluxvar = this->GetMFAVar(REVERSE_FLUX);
+		if (fluxvar != NULL) {
+			NewConstraint->Coefficient.push_back(1);
+			NewConstraint->Variables.push_back(fluxvar);
+		}
+		NewConstraint->Coefficient.push_back(1000);
+		NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
+		InProblem->AddConstraint(NewConstraint);
 	}
 
 	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable) {
@@ -3426,28 +3441,6 @@ void Reaction::BuildReactionConstraints(OptimizationParameter* InParameters,MFAP
 			NewConstraint->Coefficient.push_back(1);
 			NewConstraint->Variables.push_back(this->GetMFAVar(REACTION_SLACK));
 			InProblem->AddConstraint(NewConstraint);
-			if (!InParameters->ThermoConstraints && !InParameters->SimpleThermoConstraints && this->FType() == REVERSIBLE) {
-				LinEquation* NewConstraint = InitializeLinEquation("Associating forward flux to FORWARD_REACTION",0,LESS);
-				NewConstraint->AssociatedReaction = this;
-				MFAVariable* fluxvar = this->GetMFAVar(FORWARD_FLUX);
-				if (fluxvar != NULL) {
-					NewConstraint->Coefficient.push_back(1);
-					NewConstraint->Variables.push_back(fluxvar);
-				}
-				NewConstraint->Coefficient.push_back(-1000);
-				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
-				InProblem->AddConstraint(NewConstraint);
-				NewConstraint = InitializeLinEquation("Associating reverse flux to FORWARD_REACTION",1000,LESS);
-				NewConstraint->AssociatedReaction = this;
-				fluxvar = this->GetMFAVar(REVERSE_FLUX);
-				if (fluxvar != NULL) {
-					NewConstraint->Coefficient.push_back(1);
-					NewConstraint->Variables.push_back(fluxvar);
-				}
-				NewConstraint->Coefficient.push_back(1000);
-				NewConstraint->Variables.push_back(this->GetMFAVar(FORWARD_REACTION));
-				InProblem->AddConstraint(NewConstraint);
-			}
 		}
 	}
 

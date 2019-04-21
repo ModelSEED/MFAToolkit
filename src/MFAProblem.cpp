@@ -9668,6 +9668,100 @@ int MFAProblem::CalculateGapfillCoefficients(Data* InData,OptimizationParameter*
 	return SUCCESS;
 }	
 
+int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData) {
+	if (GetParameter("Peak data").length() > 0) {
+		//First, activate as many metabolites as possible
+		LinEquation* MetaboliteObjective = InitializeLinEquation("Metabolite objective",0,GREATER);
+		LinEquation* NewDrainFluxObjective =  InitializeLinEquation("Metabolite drain objective",0,GREATER);
+		LinEquation* OldObjective = this->ObjFunct;
+		this->ObjFunct = MetaboliteObjective;
+		//Scanning through all metabolites and capturing every unique peak
+		vector<string>* peaks = StringToStrings(GetParameter("Peak data"),";");
+		vector<MFAVariable*> drainlist;
+		this->SetMax();
+		for (int i=0; i < peaks->size(); i++) {
+			//Creating a binary variable for each peak
+			MFAVariable* peak_use = InitializeMFAVariable();
+			peak_use->Binary = true;
+			peak_use->UpperBound = 1;
+			peak_use->LowerBound = 0;
+			peak_use->Type = PEAK_USE;
+			this->AddVariable(peak_use);
+			LinEquation* newconstraint = InitializeLinEquation("peak_constraint",0,LESS);
+			newconstraint->Variables.push_back(peak_use);
+			newconstraint->Coefficient.push_back(1);
+			this->AddConstraint(newconstraint);
+			cout << "test5" << i << endl;
+			MetaboliteObjective->Variables.push_back(peak_use);
+			MetaboliteObjective->Coefficient.push_back(1);
+			vector<string>* metabolites = StringToStrings((*peaks)[i],":");
+			for (int j=1; j < metabolites->size(); j++) {
+				//If the metabolite isn't already transported, add a drain flux
+				cout << "test5" << j << endl;
+				Species* current_species = InData->FindSpecies("DATABASE",((*metabolites)[j]+"_c0").data());
+				if (current_species->GetMFAVar(DRAIN_FLUX,GetCompartment("e")->Index) == NULL) {
+					MFAVariable* drainvar = this->CreateOrGetDrainVariable(current_species,GetCompartment("c")->Index,false,FORWARD_DRAIN_FLUX);
+					NewDrainFluxObjective->Variables.push_back(drainvar);
+					NewDrainFluxObjective->Coefficient.push_back(1);
+				}
+				//Creating a binary variable for each compound matching each peak
+				peak_use = InitializeMFAVariable();
+				peak_use->Binary = true;
+				peak_use->UpperBound = 1;
+				peak_use->LowerBound = 0;
+				peak_use->Type = PEAK_USE;
+				peak_use->AssociatedSpecies = current_species;
+				this->AddVariable(peak_use);
+				newconstraint->Variables.push_back(peak_use);
+				newconstraint->Coefficient.push_back(-1);
+				LinEquation* metpeakconst = InitializeLinEquation("metabolite_peak_constraint",0,LESS);
+				metpeakconst->Variables.push_back(peak_use);
+				metpeakconst->Coefficient.push_back(1);
+				this->AddConstraint(metpeakconst);
+				//Adding every flux in the mass balance constraint for this species
+				for (int k=0; k < FNumConstraints(); j++) {
+					if (GetConstraint(k)->ConstraintMeaning.substr(2,GetConstraint(j)->ConstraintMeaning.length()-2).compare("mass_balance") == 0 && GetConstraint(k)->AssociatedSpecies == current_species) {
+						for (int m=0; m < GetConstraint(k)->Variables.size(); m++) {
+							metpeakconst->Variables.push_back(GetConstraint(k)->Variables[m]);
+							metpeakconst->Coefficient.push_back(-50);
+						}
+						break;
+					}
+				}
+			}
+		}
+		cout << "test6" << endl;
+		//Maximizing active peaks
+		this->ResetSolver();
+		this->LoadSolver();
+		//Now we run the solver
+		OptSolutionData* NewSolution = RunSolver(true,false,true);
+		//Fixing active peaks at optimal value
+		MetaboliteObjective->RightHandSide = NewSolution->Objective;
+		this->AddConstraint(MetaboliteObjective);
+		this->LoadConstToSolver(MetaboliteObjective->Index);
+		//Now we minimize the active drains
+		this->ObjFunct = NewDrainFluxObjective;
+		this->SetMin();
+		this->LoadObjective();
+		NewSolution = RunSolver(true,false,true);
+		cout << "test7" << endl;
+		for (int i=0; i < NewDrainFluxObjective->Variables.size(); i++) {
+			if (NewSolution->SolutionData[NewDrainFluxObjective->Variables[i]->Index] <= MFA_ZERO_TOLERANCE) {
+				//Turning this drain off as it's not needed to activate maximum peaks
+				NewDrainFluxObjective->Variables[i]->UpperBound = 0;
+				NewDrainFluxObjective->Variables[i]->LowerBound = 0;
+			}
+		}
+		cout << "test8" << endl;
+		//Now the problem is poised to maximize the active peaks with minimal drain fluxes
+		//Restoring original objective
+		this->SetMax();
+		this->ObjFunct = OldObjective;
+	}
+	return SUCCESS;
+}
+
 int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution) {
 	//Saving the old objective
 	SavedBounds* bounds = this->saveBounds();
@@ -9675,6 +9769,7 @@ int MFAProblem::GapFilling(Data* InData, OptimizationParameter* InParameters,Opt
 	bool originalsense = this->FMax();
 	//Setting the old objective to be greater than its minimum value
 	this->ObjectiveConstraint->RightHandSide = InParameters->MinimumTargetFlux;
+	this->CreateMetabolomicsVariablesConstraints(InData);
 	//If provided with exometabolite data, we maximize the consistency with this data
 	LinEquation* ExometaboliteObjective = NULL;
 	vector<string> exometabolites;

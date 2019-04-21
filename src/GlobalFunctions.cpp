@@ -1320,6 +1320,7 @@ OptimizationParameter* ReadParameters() {
 	NewParameters->DecomposeReversible = (GetParameter("Decompose reversible reactions").compare("1") == 0);
 	NewParameters->BinaryReactionSlackVariable = false;
 	NewParameters->ReactionSlackVariable = false;
+	NewParameters->ExcludeSimultaneousReversibleFlux = false;
 	NewParameters->ReactionErrorUseVariables = (GetParameter("include error use variables").compare("1") == 0);
 
 	//Constraint use parameters
@@ -1697,8 +1698,11 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 		// Use the value specified by user.
 		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
-	if (InParameters->CatalogueFluxLoops || InParameters->SteadyStateCommunityModeling || InParameters->ReactionAdditionStudy || InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
+	if (GetParameter("Peak data").length() > 0 || InParameters->CatalogueFluxLoops || InParameters->SteadyStateCommunityModeling || InParameters->ReactionAdditionStudy || InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
 		InParameters->DecomposeReversible = true;
+	}
+	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable || GetParameter("Peak data").length() > 0) {
+		InParameters->ExcludeSimultaneousReversibleFlux = true;
 	}
 }
 
