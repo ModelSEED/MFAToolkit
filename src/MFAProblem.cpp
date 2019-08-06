@@ -4532,10 +4532,6 @@ int MFAProblem::ReactionAdditionTesting(Data* InData, OptimizationParameter* InP
 	this->LoadSolver();
 	OptSolutionData* NewSolution = RunSolver(false,true,false);
 	double objective = NewSolution->Objective;
-	if (objective < MFA_ZERO_TOLERANCE) {
-		cout << "Skipping ATP checking because ATP production is zero without gapfilling!\n";
-		return 0;
-	}
 	ofstream Output;
 	if (PrintResults) {
 		OpenOutput(Output,FOutputFilepath()+"MFAOutput/ReactionAdditionAnalysis.txt");
@@ -4554,9 +4550,8 @@ int MFAProblem::ReactionAdditionTesting(Data* InData, OptimizationParameter* InP
 		if (PrintResults) {
 			Output << NewSolution->Objective << "\t" << sign << TestVariables[i]->AssociatedReaction->GetData("DATABASE",STRING) << "\t";
 		}
-		double fraction = NewSolution->Objective/objective;
-		if (NewSolution->Objective/objective > InParameters->ObjectiveLimit) {
-			TestVariables[i]->UpperBound = 1;
+		if (objective > MFA_ZERO_TOLERANCE && NewSolution->Objective/objective > InParameters->ObjectiveLimit) {
+			TestVariables[i]->UpperBound = 0;
 			TestVariables[i]->LowerBound = 0;
 			this->LoadVariable(TestVariables[i]->Index);
 			cout << "Rejected " << objective << " " << NewSolution->Objective << " " << sign << TestVariables[i]->AssociatedReaction->GetData("DATABASE",STRING) << endl;
