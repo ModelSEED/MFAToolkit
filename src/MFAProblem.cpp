@@ -4532,6 +4532,10 @@ int MFAProblem::ReactionAdditionTesting(Data* InData, OptimizationParameter* InP
 	this->LoadSolver();
 	OptSolutionData* NewSolution = RunSolver(false,true,false);
 	double objective = NewSolution->Objective;
+	if (objective < MFA_ZERO_TOLERANCE) {
+		cout << "Skipping ATP checking because ATP production is zero without gapfilling!\n";
+		return 0;
+	}
 	ofstream Output;
 	if (PrintResults) {
 		OpenOutput(Output,FOutputFilepath()+"MFAOutput/ReactionAdditionAnalysis.txt");
