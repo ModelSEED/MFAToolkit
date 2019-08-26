@@ -5892,6 +5892,7 @@ int MFAProblem::DetermineMinimalFeasibleMedia(Data* InData,OptimizationParameter
 
 //This is a new function for FBA attempting to better integrate all the various analyses we do
 int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationParameter* InParameters) {
+	cout << "TEST0" << "\t" << InParameters->ExcludeSimultaneousReversibleFlux << endl;
 	this->SourceDatabase = InData;
 	//Clearing any existing problem
 	if (Variables.size() > 0 || Constraints.size() > 0) {
@@ -9757,6 +9758,7 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 		vector<MFAVariable*> drainlist;
 		this->SetMax();
 		string peak_data;
+		double max_peak_value = 0;
 		for (int i=0; i < peaks->size(); i++) {
 			//Parsing specific information about the peak
 			vector<string>* metabolites = StringToStrings((*peaks)[i],":");
@@ -9784,6 +9786,9 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 				CurrentMetaboliteObjective->Coefficient.push_back(-1*peak_value);
 			} else {
 				CurrentMetaboliteObjective->Coefficient.push_back(peak_value);
+			}
+			if (fabs(peak_value) > max_peak_value) {
+				max_peak_value = fabs(peak_value);
 			}
 			for (int j=2; j < metabolites->size(); j++) {
 				//It is assumed that the metabolomics data structure contains full compound IDs
@@ -9825,7 +9830,7 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 					for (int k=0; k < FNumConstraints(); k++) {
 						if (GetConstraint(k)->ConstraintMeaning.substr(2,GetConstraint(k)->ConstraintMeaning.length()-2).compare("mass_balance") == 0 && GetConstraint(k)->AssociatedSpecies == current_species) {
 							for (int m=0; m < GetConstraint(k)->Variables.size(); m++) {
-								peak_data.append(itoa(speciesvar->Index));
+								peak_data.append(itoa(GetConstraint(k)->Variables[m]->Index));
 								peak_data.append(";");
 								bool found = false;
 								for (int n=0; n < peakconstraint->Variables.size(); n++) {
@@ -9845,6 +9850,9 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 				}
 			}
 			delete metabolites;
+		}
+		for (int i=0; i < int(CurrentMetaboliteObjective->Coefficient.size()); i++) {
+			CurrentMetaboliteObjective->Coefficient[i] = CurrentMetaboliteObjective->Coefficient[i]/max_peak_value;
 		}
 		if (ExometabolomicData) {
 			ExometaboliteObjective = CurrentMetaboliteObjective;
@@ -9867,6 +9875,7 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 		if (!ExometabolomicData) {
 			this->ObjFunct = NewDrainFluxObjective;
 			this->SetMin();
+			this->ResetSolver();
 			this->LoadSolver();
 			NewSolution = RunSolver(true,false,true);
 			for (int i=0; i < NewDrainFluxObjective->Variables.size(); i++) {
@@ -9882,11 +9891,11 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 		this->SetMax();
 		this->ObjFunct = OldObjective;
 		//Turning off binary variables preventing simultaneous flux through both components of reversible reaction
-		for (int i=0; i < this->FNumVariables(); i++) {
-			if (this->GetVariable(i)->Type == FORWARD_REACTION) {
-				this->GetVariable(i)->Binary = false;
-			}
-		}
+		//for (int i=0; i < this->FNumVariables(); i++) {
+			//if (this->GetVariable(i)->Type == FORWARD_REACTION) {
+				//this->GetVariable(i)->Binary = false;
+			//}
+		//}
 		this->ResetSolver();
 		this->LoadSolver();
 	}
@@ -9895,6 +9904,7 @@ int MFAProblem::CreateMetabolomicsVariablesConstraints(Data* InData, string Peak
 
 int MFAProblem::MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& CurrentSolution) {
 	//If metabolite objectives don't exist, just return
+	LinEquation* origobjective = this->ObjFunct;
 	if (ExometaboliteObjective == NULL && MetaboliteObjective == NULL) {
 		return SUCCESS;
 	}
@@ -9944,11 +9954,11 @@ int MFAProblem::MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& C
 			met_metabolites[i].resize(metabolites->size()-1);
 			met_variables[i].resize(metabolites->size()-1);
 			for (int j=1; j < metabolites->size(); j++) {
-				vector<string>* variables = StringToStrings((*peaks)[i],";");
-				met_metabolites[i][j] = (*variables)[0];
+				vector<string>* variables = StringToStrings((*metabolites)[j],";");
+				met_metabolites[i][j-1] = (*variables)[0];
 				for (int k=1; k < variables->size(); k++) {
 					if ((*variables)[k].length() > 0) {
-						met_variables[i][j].push_back(atoi((*variables)[k].data()));
+						met_variables[i][j-1].push_back(atoi((*variables)[k].data()));
 					}
 				}
 				delete variables;
@@ -10015,17 +10025,19 @@ int MFAProblem::MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& C
 	vector<string> activated_metabolites;
 	vector<MFAVariable*> working_metabolites;
 	vector<int> working_met_indecies;
+	active_count = 0;
 	if (MetaboliteObjective != NULL) {
 		for (int i=0; i < MetaboliteObjective->Variables.size(); i++) {
 			if (MetaboliteObjective->Variables[i]->LowerBound > 0.5) {
 				activated_metabolites.push_back("");
+				active_count++;
 				for (int j=0; j < met_metabolites[i].size(); j++) {
 					for (int k=0; k < met_variables[i][j].size(); k++) {
 						if (CurrentSolution->SolutionData[met_variables[i][j][k]] > MFA_ZERO_TOLERANCE || CurrentSolution->SolutionData[met_variables[i][j][k]] < -MFA_ZERO_TOLERANCE) {
-							if (activated_metabolites[i].length() > 0) {
-								activated_metabolites[i].append(";");
+							if (activated_metabolites[active_count-1].length() > 0) {
+								activated_metabolites[active_count-1].append(";");
 							}
-							activated_metabolites[i].append(met_metabolites[i][j]);
+							activated_metabolites[active_count-1].append(met_metabolites[i][j]);
 							break;
 						}
 					}
@@ -10040,7 +10052,7 @@ int MFAProblem::MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& C
 	}
 	//Removing all reactions one at a time and remaximizing exometabolites and metabolites
 	this->SetMax();
-	this->LoadSolver();
+	this->LoadSolver(true);
 	vector<string> exo_dependent_gfrxn;
 	vector<string> exo_dependent_rxn;
 	vector<string> met_dependent_gfrxn;
@@ -10132,6 +10144,7 @@ int MFAProblem::MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& C
 		metaoutput << "intra\t" << working_metabolites[i]->Name << "\t" << activated_metabolites[i] << "\t" << met_dependent_gfrxn[i] << "\t" << met_dependent_rxn[i] << endl;
 	}
 	metaoutput.close();
+	this->ObjFunct = origobjective;
 	return SUCCESS;
 }
 
@@ -10333,7 +10346,6 @@ int MFAProblem::RunImplementedGapfillingSolution(Data* InData, OptimizationParam
 	vector<string>* activatedrxns = StringToStrings(GetParameter("current activated reactions"),";"); // high expression, carry flux
 	vector<string>* notactivatedrxns = StringToStrings(GetParameter("current rejected reactions"),";"); // high expression, do not carry flux
 	vector<string>* cutrxns = StringToStrings(GetParameter("current cut candidate reactions"),";"); // low expression, do not carry flux
-
 	for (int gfri=0; gfri < (*gapfilledrxns).size(); gfri++) {
 		string ReactionID = (*gapfilledrxns)[gfri];
 		string Sign = ReactionID.substr(0,1);
@@ -10342,16 +10354,16 @@ int MFAProblem::RunImplementedGapfillingSolution(Data* InData, OptimizationParam
 		if (current != NULL) {
 			MFAVariable* currvar = current->GetMFAVar(REACTION_SLACK);
 			if (currvar != NULL) {
-				currvar->UpperBound = 0;
-				currvar->LowerBound = 0;
+				//currvar->UpperBound = 0;
+				//currvar->LowerBound = 0;
 				//cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 			}
 			for (int vi=0; vi < int(variables.size()); vi++) {
 				MFAVariable* currvar = current->GetMFAVar(variables[vi]);
 				if (currvar != NULL) {
 					if ((Sign.compare("+") == 0 && vi == 2) || (Sign.compare("-") == 0 && vi < 2)) {
-						currvar->UpperBound = 0;
-						currvar->LowerBound = 0;
+						//currvar->UpperBound = 0;//Commented this out to fix metabolomics fitting method
+						//currvar->LowerBound = 0;//Commented this out to fix metabolomics fitting method
 						//cout << "Set reaction variable of type " << currvar->Type << " to zero for " << currvar->AssociatedReaction->GetData("DATABASE",STRING) << endl;
 					}
 				}

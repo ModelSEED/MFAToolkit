@@ -1706,10 +1706,10 @@ void RectifyOptimizationParameters(OptimizationParameter* InParameters){
 		// Use the value specified by user.
 		//SetParameter("Minimum flux for use variable positive constraint",GetParameter("Solver tolerance").data());
 	}
-	if (GetParameter("steady state protein fba").compare("1") == 0 || GetParameter("Peak data").length() > 0 || InParameters->CatalogueFluxLoops || InParameters->SteadyStateCommunityModeling || InParameters->ReactionAdditionStudy || InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
+	if (GetParameter("steady state protein fba").compare("1") == 0 || GetParameter("Exometabolite peak data").length() > 0 || GetParameter("Intrametabolite peak data").length() > 0 || InParameters->CatalogueFluxLoops || InParameters->SteadyStateCommunityModeling || InParameters->ReactionAdditionStudy || InParameters->PROM || InParameters->DoMinimizeFlux || InParameters->ReactionsUse || InParameters->GapFilling || InParameters->ThermoConstraints || InParameters->SimpleThermoConstraints || GetParameter("Perform auxotrophy analysis").compare("1") == 0) {
 		InParameters->DecomposeReversible = true;
 	}
-	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable || GetParameter("Peak data").length() > 0) {
+	if (InParameters->ReactionSlackVariable || InParameters->BinaryReactionSlackVariable || GetParameter("Exometabolite peak data").length() > 0 || GetParameter("Intrametabolite peak data").length() > 0) {
 		InParameters->ExcludeSimultaneousReversibleFlux = true;
 	}
 }
