@@ -216,11 +216,14 @@ public:
 	void CreateReactionDrainFluxes();
 	void DecomposeToPiecewiseFluxBounds(double threshold,int minimum,MFAProblem* InProblem);
 	MFAVariable* CreateMFAVariable(MFAProblem* InProblem,int Type,double UB,double LB);
+	void CreateReversibilityConstraint(MFAProblem* InProblem);
+	MFAVariable* CreateReactionVariable(MFAProblem* InProblem,int type, double upper_bound,double lower_bound,bool binary,string name);
 	void CreateMFAVariables(OptimizationParameter* InParameters);
 	void CreateReactionFluxConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem);
 	void UpdateReactionFluxConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem);
 	void BuildReactionConstraints(OptimizationParameter* InParameters,MFAProblem* InProblem);
 	void UpdateBounds(int VarType, double Min, double Max, bool ApplyToMinMax = false);
+	void CreateUseVariableConstraint(MFAProblem* InProblem, MFAVariable* variable);
 	void AddUseVariables(OptimizationParameter* InParameters);
 	MFAVariable* GetMFAVar(int InType);
 	void GetAllMFAVariables(vector<MFAVariable*>& InVector);

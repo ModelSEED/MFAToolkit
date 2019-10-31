@@ -55,6 +55,9 @@ private:
 	LinEquation* ObjectiveConstraint;
 	LinEquation* ExometaboliteObjective;
 	LinEquation* MetaboliteObjective;
+
+	vector<vector<MFAVariable*> > MetDrains;
+	vector<vector<MFAVariable*> > ExoDrains;
 public:
 	MFAProblem();
 	~MFAProblem();
@@ -75,7 +78,7 @@ public:
 	void ClearVariables(bool DeleteThem = true);
 	void DetermineProbType();
 	LinEquation* AddSumObjective(int VarType, bool Quadratic, bool Append, double Coeff, bool ForeignOnly,LinEquation* InObjective = NULL);
-	void AddMassBalanceConstraints(Data* InData);
+	void AddMassBalanceConstraints(Data* InData,bool DilutionConstraints = false);
 	LinEquation* AddSumConstraint(int VarType, bool Quadratic, double Coeff, double RHS, int EqualityType);
 	LinEquation* AddUseSolutionConst(OptSolutionData* SolutionData, vector<int> VariableTypes, OptimizationParameter* InParameters);
 	void EnforceIntergerSolution(OptSolutionData* SolutionData, vector<int> VariableTypes, bool ForeignOnly, bool RefreshSolver);
@@ -171,6 +174,7 @@ public:
 	int MetabolomicsSensitivityAnalysis(Data* InData,OptSolutionData*& CurrentSolution);
 	int CreateMetabolomicsVariablesConstraints(Data* InData, string PeakData, bool ExometabolomicData);
 	int GapFilling(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
+	int BinaryReactionDeactivationSearch(vector<MFAVariable*> variables,vector<double> lower_bounds,vector<double> upper_bounds);
 	vector<MFAVariable*> BiomassSensitivityAnalysis(OptSolutionData*& CurrentSolution,OptimizationParameter* InParameters);
 	int ReactionSensitivityAnalysis(Data* InData,OptSolutionData*& CurrentSolution,OptimizationParameter* InParameters);
 	int RunImplementedGapfillingSolution(Data* InData, OptimizationParameter* InParameters,OptSolutionData*& CurrentSolution);
@@ -210,7 +214,7 @@ public:
 	int LoadTightBounds(Data* InData, bool SetBoundToTightBounds);
 	void SaveTightBounds();
 	void PrintSolutions(int StartIndex, int EndIndex,bool tightbounds = false);
-	void PrintVariableKey();
+	void PrintVariableKey(string InFilename = "",bool override = false);
 	void WriteLPFile();
 	void WriteMFALog();
 };
