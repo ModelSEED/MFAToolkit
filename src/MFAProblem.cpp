@@ -4621,29 +4621,26 @@ int MFAProblem::ReactionAdditionTesting(Data* InData, OptimizationParameter* InP
 	return rejected_count;
 }
 
-int MFAProblem::SteadyStateCommunityModeling(Data* InData, OptimizationParameter* InParameters,bool set_objective_to_total_biomass,double start_kinetic_coef,int iterations,double iteration_size) {
+int MFAProblem::SteadyStateCommunityModeling(Data* InData, OptimizationParameter* InParameters) {
 	int StartState = this->SaveState();
 	LinEquation* OldObjective = ObjFunct;
 	ClearSolutions();
+	ObjFunct = InitializeLinEquation("Max total biomass objective",0);
+	SetMax();
 	//Remove restrictions on objective function
 	if (ObjectiveConstraint != NULL) {
 		ObjectiveConstraint->RightHandSide = 0;
 	}
+	//Constraining bio1 to 0
+	Reaction* community_biomass = InData->FindReaction("DATABASE","bio1");
+	if (community_biomass != NULL) {
+		community_biomass->ResetFluxBounds(0,0,this);
+	}
+	//Adding drain fluxes for all biomass compounds and creating object function as sum of these drains
 	vector<MFAVariable*> biomass_variables;
 	vector<int> compartment_indecies;
 	vector<LinEquation*> flux_constraints;
-	double flux_coefficient = start_kinetic_coef;
-	if (set_objective_to_total_biomass) {
-		//Constraining community biomass (bio1) to 0
-		Reaction* community_biomass = InData->FindReaction("DATABASE","bio1");
-		if (community_biomass != NULL) {
-			community_biomass->ResetFluxBounds(0,0,this);
-		}
-		//Initializing new objective function as the sum of each individual biomass
-		ObjFunct = InitializeLinEquation("Max total biomass objective",0);
-		SetMax();
-	}
-	//Adding drain fluxes for all biomass compounds and creating object function as sum of these drains
+	double flux_coefficient = 2000;
 	for (int i=1; i < 1000; i++) {
 		string bio_id("cpd11416_c");
 		bio_id += itoa(i);
@@ -4651,27 +4648,16 @@ int MFAProblem::SteadyStateCommunityModeling(Data* InData, OptimizationParameter
 		if (biospecies == NULL) {
 			break;
 		} else {
-			if (set_objective_to_total_biomass) {
-				MFAVariable* drain_var = CreateOrGetDrainVariable(biospecies,GetDefaultCompartment()->Index);
-				ObjFunct->Variables.push_back(drain_var);
-				ObjFunct->Coefficient.push_back(-1);
-			}
-			bio_id.assign("bio");
-			bio_id += itoa(i);
-			Reaction* species_biomass = InData->FindReaction("DATABASE",bio_id.data());
-			MFAVariable* flux = species_biomass->GetMFAVar(FLUX);
-			if (flux == NULL) {
-				flux = species_biomass->GetMFAVar(FORWARD_FLUX);
-			}
-			if (flux != NULL) {
-				compartment_indecies.push_back(i);
-				biomass_variables.push_back(flux);
-				LinEquation* NewConstraint = InitializeLinEquation("Compartment total flux constraint",0,LESS);
-				NewConstraint->Variables.push_back(flux);
-				NewConstraint->Coefficient.push_back(-1*flux_coefficient);
-				flux_constraints.push_back(NewConstraint);
-				this->AddConstraint(NewConstraint);
-			}
+			MFAVariable* drain_var = CreateOrGetDrainVariable(biospecies,GetDefaultCompartment()->Index);
+			ObjFunct->Variables.push_back(drain_var);
+			ObjFunct->Coefficient.push_back(-1);
+			compartment_indecies.push_back(i);
+			biomass_variables.push_back(drain_var);
+			LinEquation* NewConstraint = InitializeLinEquation("Compartment total flux constraint",0,LESS);
+			NewConstraint->Variables.push_back(drain_var);
+			NewConstraint->Coefficient.push_back(flux_coefficient);
+			flux_constraints.push_back(NewConstraint);
+			this->AddConstraint(NewConstraint);
 		}
 	}
 	//Adding all fluxes from all reactions in each compartment to the flux constraints
@@ -4698,19 +4684,19 @@ int MFAProblem::SteadyStateCommunityModeling(Data* InData, OptimizationParameter
 		Output << "\tbio" << compartment_indecies[i];
 	}
 	Output << endl;
-	for (int j=0; j < iterations; j++) {
+	for (int j=0; j < 20; j++) {
 		this->LoadSolver();
 		OptSolutionData* NewSolution = RunSolver(true,true,false);
 		if (NewSolution->Status == SUCCESS) {
 			Output << flux_coefficient << "\t" << NewSolution->Objective;
 			for (int i=0; i < biomass_variables.size(); i++) {
-				Output << "\t" << NewSolution->SolutionData[biomass_variables[i]->Index];
+				Output << "\t" << -1*NewSolution->SolutionData[biomass_variables[i]->Index];
 			}
 			Output << endl;
 		} else {
 			Output << flux_coefficient << "\tInfeasible" << endl;
 		}
-		flux_coefficient += iteration_size;
+		flux_coefficient += 100;
 		for (int i=0; i < flux_constraints.size(); i++) {
 			flux_constraints[i]->Coefficient[0] = flux_coefficient;
 		}
@@ -6062,7 +6048,7 @@ int MFAProblem::FluxBalanceAnalysisMasterPipeline(Data* InData, OptimizationPara
 	}
 
 	if (InParameters->SteadyStateCommunityModeling) {
-		return SteadyStateCommunityModeling(InData,InParameters,GetParameter("Unconstrain community biomass abundances").compare("1") == 0,atof(GetParameter("Starting flux coefficient").data()),atoi(GetParameter("Flux coefficient iterations").data()),atof(GetParameter("Flux coefficient step size").data()));
+		return SteadyStateCommunityModeling(InData,InParameters);
 	}
 
 	//In this optional analysis, we maximize the number of reactions carrying flux at the same time
